@@ -25,6 +25,9 @@ func cmdNetwork(ctx context.Context, a *app.App, args []string, o *out) int {
 	if _, err := parse(fs, args); err != nil {
 		return ExitUsage
 	}
+	if *secs < 1 || *secs > diagnostics.MaxLoadSeconds {
+		return usageErr(o, fmt.Sprintf("--load-seconds must be between 1 and %d", diagnostics.MaxLoadSeconds))
+	}
 	if (*down != "" || *up != "") && !*ext {
 		return usageErr(o, "--load-url/--upload-url contact external hosts; add --external to confirm")
 	}
@@ -95,7 +98,7 @@ func cmdNetwork(ctx context.Context, a *app.App, args []string, o *out) int {
 	pr("Internet", res.Internet)
 	for _, ls := range []*diagnostics.LoadStats{res.Download, res.Upload} {
 		if ls != nil && ls.Error == "" {
-			o.printf("  %-9s %-16s %.0f Mbit/s · p50 %5.1f ms · p95 %5.1f ms under load\n", o.dim(strings.Title(ls.Direction)), ls.Host, ls.Mbps, ls.Under.P50Ms, ls.Under.P95Ms) //nolint:staticcheck
+			o.printf("  %-9s %-16s %.0f Mbit/s · p50 %5.1f ms · p95 %5.1f ms under load\n", o.dim(strings.ToUpper(ls.Direction[:1])+ls.Direction[1:]), ls.Host, ls.Mbps, ls.Under.P50Ms, ls.Under.P95Ms)
 		}
 	}
 

@@ -119,7 +119,7 @@ TurboShift changes system settings. It previews every change, keeps a restore po
 
 ## Status and honesty
 
-Version `0.1.0` (first public pre-release). What has been **verified**:
+Version `0.1.1` (public pre-release). What has been **verified**:
 
 - Unit and integration tests (`make test`, run with the race detector): detection against fake `/proc` and `/sys`, the transaction engine (apply, verify, rollback, drift, crash recovery, locking, concurrency, cancellation), the privilege allowlist, diagnostics, benchmark statistics, CLI behaviour and exit codes, and the TUI driven end to end (scan → preview → apply → verify → undo, mouse hit-testing, every screen at 64×18 up to 200×50, no-colour and ASCII output).
 - The real binary run in a pseudo-terminal on an Arch-based machine, **read-only**: dashboard, scan, doctor, optimizer preview, all screens, dialogs, quit.

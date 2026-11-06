@@ -90,7 +90,7 @@ func (d Direct) Do(_ context.Context, a Action) (Result, error) {
 	return Result{Previous: prev}, nil
 }
 
-// Pkexec asks polkit to run `turbo __priv <op> <path> <value>` as root.
+// Pkexec asks polkit to run `turbo __priv <op> <path> <value> [...]` as root.
 // Arguments travel as an argv array; no shell is involved.
 type Pkexec struct {
 	Run  platform.Runner
@@ -150,21 +150,110 @@ func (p Pkexec) Do(ctx context.Context, a Action) (Result, error) {
 	if ok, why := p.Available(); !ok {
 		return Result{}, errors.New(why)
 	}
-	res, err := p.Run.Run(ctx, "pkexec", p.Self, HelperCommand, a.Op, a.Path, a.Value)
+	out, err := p.helper(ctx, a.Op, a.Path, a.Value)
+	if err != nil {
+		return Result{}, err
+	}
+	return Result{Previous: out}, nil
+}
+
+// helper runs `pkexec turbo __priv args...` and maps polkit's failures to
+// messages a person can act on. It returns the helper's trimmed stdout.
+func (p Pkexec) helper(ctx context.Context, args ...string) (string, error) {
+	res, err := p.Run.Run(ctx, "pkexec", append([]string{p.Self, HelperCommand}, args...)...)
 	if err != nil {
 		switch res.ExitCode {
 		case 126:
-			return Result{}, errors.New("administrator authorisation was dismissed or denied")
+			return "", errors.New("administrator authorisation was dismissed or denied")
 		case 127:
-			return Result{}, errors.New("polkit could not start the privileged helper (is a graphical or text polkit agent running?)")
+			return "", errors.New("polkit could not start the privileged helper (is a graphical or text polkit agent running?)")
 		}
 		msg := strings.TrimSpace(res.Stderr)
 		if msg == "" {
 			msg = err.Error()
 		}
-		return Result{}, fmt.Errorf("privileged helper failed: %s", msg)
+		return "", fmt.Errorf("privileged helper failed: %s", msg)
 	}
-	return Result{Previous: strings.TrimSpace(res.Stdout)}, nil
+	return strings.TrimSpace(res.Stdout), nil
+}
+
+// maxBatch bounds one helper run (no machine has this many CPUs).
+const maxBatch = 4096
+
+// Batcher is implemented by executors that can perform several allowlisted
+// actions of one operation under a single authorisation.
+type Batcher interface {
+	DoBatch(ctx context.Context, as []Action) error
+}
+
+// DoAll performs the actions with as few authorisation prompts as the
+// executor allows. Every action is validated before any is performed, and a
+// failure on one does not stop the others (a restore must be best-effort).
+func DoAll(ctx context.Context, ex Executor, as []Action) error {
+	if len(as) == 0 {
+		return nil
+	}
+	if b, ok := ex.(Batcher); ok {
+		return b.DoBatch(ctx, as)
+	}
+	if err := validateAll(as); err != nil {
+		return err
+	}
+	var errs []error
+	for _, a := range as {
+		if _, err := ex.Do(ctx, a); err != nil {
+			errs = append(errs, err)
+			if ctx.Err() != nil {
+				break
+			}
+		}
+	}
+	return errors.Join(errs...)
+}
+
+func validateAll(as []Action) error {
+	if len(as) > maxBatch {
+		return fmt.Errorf("%w: too many actions in one request (%d)", ErrDenied, len(as))
+	}
+	for _, a := range as {
+		if err := Validate(a); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// DoBatch is one polkit prompt and one root helper run for all actions.
+func (p Pkexec) DoBatch(ctx context.Context, as []Action) error {
+	if err := validateAll(as); err != nil { // fail fast before prompting
+		return err
+	}
+	if ok, why := p.Available(); !ok {
+		return errors.New(why)
+	}
+	args := []string{as[0].Op}
+	for _, a := range as {
+		if a.Op != as[0].Op {
+			return fmt.Errorf("%w: mixed operations in one request", ErrDenied)
+		}
+		args = append(args, a.Path, a.Value)
+	}
+	_, err := p.helper(ctx, args...)
+	return err
+}
+
+// DoBatch performs the actions in-process (root helper and tests).
+func (d Direct) DoBatch(ctx context.Context, as []Action) error {
+	if err := validateAll(as); err != nil {
+		return err
+	}
+	var errs []error
+	for _, a := range as {
+		if _, err := d.Do(ctx, a); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
 }
 
 // RunHelper is the body of `turbo __priv`: it runs as root, re-validates the
@@ -173,15 +262,27 @@ func RunHelper(ctx context.Context, fs platform.FS, euid int, args []string, std
 	if euid != 0 {
 		return errors.New("the privileged helper must run as root (it is started through pkexec)")
 	}
-	if len(args) != 3 {
-		return fmt.Errorf("usage: turbo %s <op> <path> <value>", HelperCommand)
+	if len(args) < 3 || len(args)%2 != 1 {
+		return fmt.Errorf("usage: turbo %s <op> <path> <value> [<path> <value> ...]", HelperCommand)
 	}
-	res, err := Direct{FS: fs}.Do(ctx, Action{Op: args[0], Path: args[1], Value: args[2]})
-	if err != nil {
+	var as []Action
+	for i := 1; i < len(args); i += 2 {
+		as = append(as, Action{Op: args[0], Path: args[i], Value: args[i+1]})
+	}
+	// Nothing is written unless every pair passes the allowlist.
+	if err := validateAll(as); err != nil {
 		return err
 	}
-	stdout(res.Previous)
-	return nil
+	var errs []error
+	for _, a := range as {
+		res, err := Direct{FS: fs}.Do(ctx, a)
+		if err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		stdout(res.Previous)
+	}
+	return errors.Join(errs...)
 }
 
 // Fake is a test Executor that records actions and writes through an FS.
@@ -190,6 +291,7 @@ type Fake struct {
 	Actions []Action
 	Err     error // returned for every Do when set
 	NoAuth  string
+	Batches int // number of DoBatch calls (each is one authorisation prompt)
 }
 
 func (f *Fake) Available() (bool, string) {
@@ -197,6 +299,21 @@ func (f *Fake) Available() (bool, string) {
 		return false, f.NoAuth
 	}
 	return true, ""
+}
+
+// DoBatch counts as one authorisation: Batches records how many there were.
+func (f *Fake) DoBatch(ctx context.Context, as []Action) error {
+	if err := validateAll(as); err != nil {
+		return err
+	}
+	f.Batches++
+	var errs []error
+	for _, a := range as {
+		if _, err := f.Do(ctx, a); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
 }
 
 func (f *Fake) Do(ctx context.Context, a Action) (Result, error) {

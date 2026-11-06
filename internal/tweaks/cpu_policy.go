@@ -157,6 +157,8 @@ func (c CPUPolicy) Plan(ctx context.Context, env Env, params map[string]string) 
 	}, nil
 }
 
+// write sets every CPU's governor under ONE administrator authorisation
+// (a prompt per thread would mean dozens of password dialogs).
 func (CPUPolicy) write(ctx context.Context, env Env, target State) error {
 	if env.Priv == nil {
 		return errors.New("no privilege executor configured")
@@ -166,22 +168,15 @@ func (CPUPolicy) write(ctx context.Context, env Env, target State) error {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
-	var errs []error
+	var as []privilege.Action
 	for _, k := range keys {
 		var n int
-		fmt.Sscanf(k, "cpu%d.governor", &n)
-		if _, err := env.Priv.Do(ctx, privilege.Action{Op: privilege.OpWriteSysfs, Path: govPath(n), Value: target[k]}); err != nil {
-			errs = append(errs, err)
-			if ctx.Err() != nil {
-				break
-			}
-			// A cancelled authorisation prompt will fail identically for every CPU.
-			if len(errs) == 1 && strings.Contains(err.Error(), "authori") {
-				break
-			}
+		if _, err := fmt.Sscanf(k, "cpu%d.governor", &n); err != nil {
+			return fmt.Errorf("unexpected state key %q", k)
 		}
+		as = append(as, privilege.Action{Op: privilege.OpWriteSysfs, Path: govPath(n), Value: target[k]})
 	}
-	return errors.Join(errs...)
+	return privilege.DoAll(ctx, env.Priv, as)
 }
 
 func (c CPUPolicy) Apply(ctx context.Context, env Env, p Plan) error {

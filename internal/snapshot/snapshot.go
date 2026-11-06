@@ -224,13 +224,14 @@ func (st *Store) List() (snaps []*Snapshot, corrupt []string, err error) {
 	return snaps, corrupt, nil
 }
 
-// Interrupted returns snapshots left in "applying" state: a previous run was
-// killed mid-transaction and needs recovery.
+// Interrupted returns snapshots that still need recovery: "applying" (a
+// previous run was killed mid-transaction) and "rollback_failed" (an automatic
+// rollback could not revert everything, so settings may still be changed).
 func (st *Store) Interrupted() ([]*Snapshot, error) {
 	all, _, err := st.List()
 	var out []*Snapshot
 	for _, s := range all {
-		if s.Status == StatusApplying {
+		if s.Status == StatusApplying || s.Status == StatusRollbackFailed {
 			out = append(out, s)
 		}
 	}

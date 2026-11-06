@@ -13,11 +13,11 @@ If another program changed one of the settings after TurboShift did, that item i
 
 Nothing for you to do. The engine reverts everything already changed in that transaction and the result dialog says "Nothing was changed" and why. The restore point is marked `rolled_back`.
 
-If the dialog says **Rollback incomplete**, the failure was followed by a failure to revert. The message names what could not be reverted. Open `turbo snapshots show <id>` for the journal (before/after values per setting) and either fix the setting by hand using those values or retry with `turbo snapshots restore <id>`.
+If the dialog says **Rollback incomplete**, the failure was followed by a failure to revert. The message names what could not be reverted. The restore point is marked `rollback_failed` and is treated like an interrupted change: the TUI offers *Recover now* on the next start, or run `turbo snapshots recover` once the cause is gone (for example the daemon is running again). It retries only the items that are still changed. New changes are refused until it succeeds. `turbo snapshots show <id>` shows the journal (before/after values per setting) if you prefer to fix a setting by hand.
 
 ## 3. TurboShift was interrupted mid-change
 
-A crash, power loss or `kill -9` during a transaction leaves a snapshot in the `applying` state. On the next start the TUI shows **Unfinished changes found** and offers *Recover now*; from the CLI use `turbo snapshots recover`. Recovery reverts every item that may have been touched, using the "before" values saved *before* the change started. New changes are refused until recovery is done, so you cannot stack a change on a half-applied one.
+A crash, power loss or `kill -9` during a transaction leaves a snapshot in the `applying` state (or `rollback_failed`, see above). On the next start the TUI shows **Unfinished changes found** and offers *Recover now*; from the CLI use `turbo snapshots recover`. Recovery reverts every item that may have been touched, using the "before" values saved *before* the change started. New changes are refused until recovery is done, so you cannot stack a change on a half-applied one.
 
 ## Manual last resort
 

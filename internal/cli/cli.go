@@ -4,7 +4,6 @@ package cli
 
 import (
 	"context"
-	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -131,8 +130,6 @@ func parse(fs *flag.FlagSet, args []string) ([]string, error) {
 		args = args[1:]
 	}
 }
-
-var errUsage = errors.New("usage")
 
 func usageErr(o *out, format string, a ...any) int {
 	fmt.Fprintf(o.err, "turbo: "+format+"\n", a...)

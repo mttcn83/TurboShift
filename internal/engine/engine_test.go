@@ -186,6 +186,41 @@ func TestRollbackFailureIsReportedHonestly(t *testing.T) {
 	}
 }
 
+// A rollback that failed halfway must stay recoverable: it blocks new
+// transactions and `recover` finishes the job once the cause is gone.
+func TestFailedRollbackCanBeRecoveredLater(t *testing.T) {
+	r := newRig(t, func(m *simtest.Machine) { m.Fail["nm-reapply"] = errors.New("boom") })
+	_, err := r.eng.Apply(ctx, []Request{ppd("performance"), wifi("off")}, "x", func(e Event) {
+		if e.Phase == "rollback" {
+			r.m.Fail["ppd-set"] = errors.New("daemon died")
+		}
+	})
+	var te *TransactionError
+	if !errors.As(err, &te) || te.RollbackErr == nil {
+		t.Fatalf("setup: want incomplete rollback, got %v", err)
+	}
+	if r.m.PPDProfile != "performance" {
+		t.Fatalf("setup: profile should be stuck on performance, is %s", r.m.PPDProfile)
+	}
+	pend, _ := r.eng.Interrupted()
+	if len(pend) != 1 || pend[0].ID != te.SnapshotID {
+		t.Fatalf("failed rollback not offered for recovery: %v", pend)
+	}
+	if _, err := r.eng.Apply(ctx, []Request{ppd("power-saver")}, "y", nil); err == nil || !strings.Contains(err.Error(), "recover") {
+		t.Errorf("new transactions must wait, got %v", err)
+	}
+	delete(r.m.Fail, "ppd-set") // the daemon is back
+	if err := r.eng.Recover(ctx, te.SnapshotID, nil); err != nil {
+		t.Fatal(err)
+	}
+	if r.m.PPDProfile != "balanced" {
+		t.Errorf("recovery did not restore the original profile: %s", r.m.PPDProfile)
+	}
+	if s, _ := r.eng.Store.Load(te.SnapshotID); s.Status != snapshot.StatusRolledBack {
+		t.Errorf("status = %s", s.Status)
+	}
+}
+
 func TestDriftIsDetectedAndNotOverwrittenUnlessForced(t *testing.T) {
 	r := newRig(t)
 	snap, _ := r.eng.Apply(ctx, []Request{ppd("performance")}, "x", nil)
@@ -457,6 +492,9 @@ func TestCPUPolicyAppliesToAllCoresAndRestores(t *testing.T) {
 	if len(r.priv.Actions) != 2 {
 		t.Errorf("actions: %+v", r.priv.Actions)
 	}
+	if r.priv.Batches != 1 {
+		t.Errorf("all CPUs must be written under one authorisation, got %d prompts", r.priv.Batches)
+	}
 	for _, a := range r.priv.Actions {
 		if privilege.Validate(a) != nil {
 			t.Errorf("tweak issued a non-allowlisted action: %+v", a)
@@ -467,6 +505,9 @@ func TestCPUPolicyAppliesToAllCoresAndRestores(t *testing.T) {
 	}
 	if r.m.Governor(0) != "powersave" || r.m.Governor(1) != "powersave" {
 		t.Error("not restored")
+	}
+	if r.priv.Batches != 2 {
+		t.Errorf("restore should add exactly one more authorisation, total %d", r.priv.Batches)
 	}
 }
 

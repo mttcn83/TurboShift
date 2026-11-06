@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.1
+
+Bug-fix release found by a second audit pass (static analysis, parser fuzzing, code review).
+
+- **Fixed:** an automatic rollback that failed halfway (status `rollback_failed`) could never be retried: `recover` ignored it, `restore` refused it, and the error message pointed at `restore`. It is now treated like an interrupted change: offered for recovery at the next start, blocks new changes, and `turbo snapshots recover` finishes it.
+- **Fixed:** the CPU governor tweak asked for administrator permission once per CPU thread (dozens of prompts on a modern machine). All threads are now written under one authorisation; the root helper validates every path/value pair against the allowlist before writing any of them.
+- **Fixed:** Network Doctor load tests followed HTTP redirects to hosts that were never shown in the "this run will contact" list, and counted an HTTP error page as throughput. Redirects are now limited to the disclosed host and error responses fail the test.
+- **Fixed:** `--load-seconds` accepted zero, negative and absurd values; it is now limited to 1-120.
+- Added fuzz tests for the MangoHud/system-file parsers (no crashes found) and cleaned up all `staticcheck` findings.
+
 ## 0.1.0
 
 First public pre-release.

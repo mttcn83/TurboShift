@@ -2,6 +2,7 @@ package diagnostics
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -33,6 +34,9 @@ type NetOptions struct {
 	LoadSeconds int
 }
 
+// MaxLoadSeconds bounds a load test so a typo cannot saturate the link for hours.
+const MaxLoadSeconds = 120
+
 func (o NetOptions) withDefaults() NetOptions {
 	if o.Count == 0 {
 		o.Count = 20
@@ -40,9 +44,10 @@ func (o NetOptions) withDefaults() NetOptions {
 	if o.Interval == 0 {
 		o.Interval = 200 * time.Millisecond
 	}
-	if o.LoadSeconds == 0 {
+	if o.LoadSeconds <= 0 {
 		o.LoadSeconds = 10
 	}
+	o.LoadSeconds = min(o.LoadSeconds, MaxLoadSeconds)
 	return o
 }
 
@@ -485,6 +490,19 @@ func (z *countingZeros) Read(p []byte) (int, error) {
 	return len(p), nil
 }
 
+// sameHostClient follows redirects only within the host the user was shown in
+// the "this run will contact" list, so a redirect cannot send traffic anywhere
+// that was not disclosed.
+var sameHostClient = &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
+	if req.URL.Host != via[0].URL.Host {
+		return fmt.Errorf("refusing redirect to %s: only %s was disclosed", req.URL.Host, via[0].URL.Host)
+	}
+	if len(via) >= 5 {
+		return errors.New("too many redirects")
+	}
+	return nil
+}}
+
 func (HTTPLoader) Load(ctx context.Context, rawURL string, upload bool) (float64, error) {
 	u, err := url.Parse(rawURL)
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
@@ -506,10 +524,13 @@ func (HTTPLoader) Load(ctx context.Context, rawURL string, upload bool) (float64
 	}
 	req.Header.Set("User-Agent", "turboshift-network-doctor")
 	t0 := time.Now()
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := sameHostClient.Do(req)
 	var n int64
 	if err == nil {
 		defer resp.Body.Close()
+		if resp.StatusCode >= 400 { // an error page is not a measurement
+			return 0, fmt.Errorf("server answered %s", resp.Status)
+		}
 		if upload {
 			_, _ = io.Copy(io.Discard, resp.Body)
 		} else {

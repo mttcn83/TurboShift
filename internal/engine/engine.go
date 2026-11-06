@@ -73,7 +73,7 @@ func (t *TransactionError) Error() string {
 	case t.RolledBack:
 		s += " — all changes were rolled back"
 	case t.RollbackErr != nil:
-		s += fmt.Sprintf(" — ROLLBACK INCOMPLETE (%v); run restore on snapshot %s", t.RollbackErr, t.SnapshotID)
+		s += fmt.Sprintf(" — ROLLBACK INCOMPLETE (%v); run `turbo snapshots recover` (restore point %s)", t.RollbackErr, t.SnapshotID)
 	}
 	return s
 }
@@ -424,8 +424,8 @@ func (e *Engine) Recover(ctx context.Context, id string, on func(Event)) error {
 	if err != nil {
 		return err
 	}
-	if snap.Status != snapshot.StatusApplying {
-		return fmt.Errorf("restore point %s is not interrupted (%s)", id, snap.Status)
+	if snap.Status != snapshot.StatusApplying && snap.Status != snapshot.StatusRollbackFailed {
+		return fmt.Errorf("restore point %s does not need recovery (%s)", id, snap.Status)
 	}
 	var errs []error
 	for i := len(snap.Items) - 1; i >= 0; i-- {

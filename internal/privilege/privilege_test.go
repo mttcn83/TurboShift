@@ -213,3 +213,84 @@ func TestDirectNeverCreatesMissingAttributes(t *testing.T) {
 		t.Errorf("created %v", fs.Writes)
 	}
 }
+
+// ---- batching: one polkit prompt for all CPUs ----
+
+const gov7 = "/sys/devices/system/cpu/cpu7/cpufreq/scaling_governor"
+
+func TestPkexecBatchIsOnePromptAndValidatesEverything(t *testing.T) {
+	run := platform.NewFakeRunner()
+	run.Install("pkexec")
+	want := "pkexec /usr/bin/turbo __priv write-sysfs " + gov + " performance " + gov7 + " performance"
+	run.On(want, platform.Reply{Stdout: "powersave\npowersave\n"})
+	p := Pkexec{Run: run, Self: "/usr/bin/turbo", Lstat: rootOwned(nil)}
+	as := []Action{{OpWriteSysfs, gov, "performance"}, {OpWriteSysfs, gov7, "performance"}}
+	if err := p.DoBatch(context.Background(), as); err != nil {
+		t.Fatal(err)
+	}
+	if len(run.Calls) != 1 || !run.Called(want) {
+		t.Errorf("want exactly one pkexec call, got %v", run.Calls)
+	}
+
+	// One bad entry refuses the whole request before any prompt.
+	run2 := platform.NewFakeRunner()
+	run2.Install("pkexec")
+	bad := append(as, Action{OpWriteSysfs, "/etc/shadow", "x"})
+	if err := (Pkexec{Run: run2, Self: "/x", Lstat: rootOwned(nil)}).DoBatch(context.Background(), bad); !errors.Is(err, ErrDenied) || len(run2.Calls) != 0 {
+		t.Errorf("err=%v calls=%v", err, run2.Calls)
+	}
+	// And the same protection holds for a user-writable binary (a root caller
+	// has no pkexec step, so this part only applies to ordinary users).
+	if os.Geteuid() != 0 {
+		over := map[string]fakeInfo{"/usr/bin/turbo": {"turbo", 0o775, &syscall.Stat_t{Uid: 0}}}
+		if err := (Pkexec{Run: run2, Self: "/usr/bin/turbo", Lstat: rootOwned(over)}).DoBatch(context.Background(), as); err == nil || len(run2.Calls) != 0 {
+			t.Errorf("unsafe binary reached pkexec: %v %v", err, run2.Calls)
+		}
+	}
+}
+
+func TestRunHelperBatchWritesAllOrNothingOnValidation(t *testing.T) {
+	fs := platform.NewMemFS().Set(gov, "powersave\n").Set(gov7, "powersave\n")
+	var printed []string
+	say := func(s string) { printed = append(printed, s) }
+	if err := RunHelper(context.Background(), fs, 0, []string{OpWriteSysfs, gov, "performance", gov7, "performance"}, say); err != nil {
+		t.Fatal(err)
+	}
+	if v, _ := platform.ReadTrim(fs, gov); v != "performance" {
+		t.Error("first not written")
+	}
+	if v, _ := platform.ReadTrim(fs, gov7); v != "performance" {
+		t.Error("second not written")
+	}
+	if len(printed) != 2 || printed[0] != "powersave" {
+		t.Errorf("previous values: %v", printed)
+	}
+
+	// A bad pair anywhere means NOTHING is written.
+	fs2 := platform.NewMemFS().Set(gov, "powersave\n")
+	err := RunHelper(context.Background(), fs2, 0, []string{OpWriteSysfs, gov, "performance", "/etc/passwd", "x"}, say)
+	if !errors.Is(err, ErrDenied) {
+		t.Errorf("want ErrDenied, got %v", err)
+	}
+	if v, _ := platform.ReadTrim(fs2, gov); v != "powersave" {
+		t.Errorf("a rejected batch must not write anything, governor is %q", v)
+	}
+	// Odd/even arity mistakes are refused.
+	if err := RunHelper(context.Background(), fs2, 0, []string{OpWriteSysfs, gov}, say); err == nil {
+		t.Error("missing value accepted")
+	}
+	if err := RunHelper(context.Background(), fs2, 0, []string{OpWriteSysfs, gov, "performance", gov7}, say); err == nil {
+		t.Error("dangling path accepted")
+	}
+}
+
+func TestDoAllContinuesAfterOneFailure(t *testing.T) {
+	fs := platform.NewMemFS().Set(gov, "powersave\n") // gov7 does not exist
+	err := DoAll(context.Background(), Direct{FS: fs}, []Action{{OpWriteSysfs, gov7, "performance"}, {OpWriteSysfs, gov, "performance"}})
+	if err == nil || !strings.Contains(err.Error(), "does not exist") {
+		t.Errorf("want the missing-attribute error, got %v", err)
+	}
+	if v, _ := platform.ReadTrim(fs, gov); v != "performance" {
+		t.Error("one failure must not stop the remaining writes (restores are best-effort)")
+	}
+}

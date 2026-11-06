@@ -3,6 +3,8 @@ package diagnostics
 import (
 	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"sync"
 	"testing"
@@ -467,6 +469,40 @@ func TestLoaderRejectsNonHTTPURLs(t *testing.T) {
 	for _, u := range []string{"file:///etc/passwd", "ftp://x/y", "javascript:alert(1)", "not a url", ""} {
 		if _, err := (HTTPLoader{}).Load(context.Background(), u, false); err == nil {
 			t.Errorf("accepted %q", u)
+		}
+	}
+}
+
+func TestLoaderRefusesRedirectsToUndisclosedHosts(t *testing.T) {
+	other := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { t.Error("followed a redirect to another host") }))
+	defer other.Close()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, other.URL, http.StatusFound)
+	}))
+	defer srv.Close()
+	// 127.0.0.1:port differs between the two servers, so this is a cross-host redirect.
+	if _, err := (HTTPLoader{}).Load(context.Background(), srv.URL, false); err == nil || !strings.Contains(err.Error(), "refusing redirect") {
+		t.Fatalf("want refusal, got %v", err)
+	}
+}
+
+func TestLoaderTreatsHTTPErrorsAsFailures(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, strings.Repeat("not found ", 1000), http.StatusNotFound)
+	}))
+	defer srv.Close()
+	for _, up := range []bool{false, true} {
+		mbps, err := (HTTPLoader{}).Load(context.Background(), srv.URL, up)
+		if err == nil || mbps != 0 {
+			t.Errorf("upload=%v: an error page must not count as throughput: %v mbps, err %v", up, mbps, err)
+		}
+	}
+}
+
+func TestLoadSecondsIsBounded(t *testing.T) {
+	for in, want := range map[int]int{-5: 10, 0: 10, 30: 30, 100000: MaxLoadSeconds} {
+		if got := (NetOptions{LoadSeconds: in}).withDefaults().LoadSeconds; got != want {
+			t.Errorf("LoadSeconds %d -> %d, want %d", in, got, want)
 		}
 	}
 }

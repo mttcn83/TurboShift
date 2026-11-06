@@ -62,10 +62,9 @@ type (
 		err  error
 	}
 	importDoneMsg struct {
-		run  benchmark.Run
-		src  string
-		err  error
-		last bool
+		run benchmark.Run
+		src string
+		err error
 	}
 )
 

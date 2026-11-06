@@ -117,7 +117,7 @@ func (m *Model) viewSettings(w, h int) []string {
 	}
 	var b []string
 	for i, r := range rows {
-		line := fmt.Sprintf("%-20s %-18s %s", r.label, r.value, "")
+		var line string
 		if i == m.st.cursor && !m.st.ping.active && !m.st.lookup.active {
 			line = m.th.Sel(fit(" "+fmt.Sprintf("%-20s %-18s", r.label, r.value), w-4))
 		} else {

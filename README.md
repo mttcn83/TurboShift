@@ -28,15 +28,7 @@ Most "optimizers" apply a pile of tweaks and hope. TurboShift's rules:
 
 TurboShift is a single static binary for Linux (x86-64 or arm64). There is nothing to configure and no account to create.
 
-**Option A: download a release binary** (no Go needed). From the [Releases page](https://github.com/mttcn83/TurboShift/releases) grab `turbo-linux-amd64` (or `-arm64`) and `SHA256SUMS`, then:
-
-```bash
-sha256sum -c --ignore-missing SHA256SUMS
-sudo install -m755 turbo-linux-amd64 /usr/local/bin/turbo
-turbo
-```
-
-**Option B: build from source.** Needs Go 1.27+ and `git` (Arch: `sudo pacman -S go git` · Debian/Ubuntu: `sudo apt install golang git` · Fedora: `sudo dnf install golang git` · openSUSE: `sudo zypper install go git`; if your distro's Go is older than 1.27, get it from [go.dev/dl](https://go.dev/dl/)).
+Build from source (about a minute). Needs Go 1.27+ and `git` (Arch: `sudo pacman -S go git` · Debian/Ubuntu: `sudo apt install golang git` · Fedora: `sudo dnf install golang git` · openSUSE: `sudo zypper install go git`; if your distro's Go is older than 1.27, get it from [go.dev/dl](https://go.dev/dl/)).
 
 ```bash
 git clone https://github.com/mttcn83/TurboShift.git && cd TurboShift
@@ -45,7 +37,7 @@ sudo make install     # installs to /usr/local/bin (PREFIX=... to change)
 turbo
 ```
 
-You can also just run `./turbo` from the build folder. Everything works that way except the one administrator action (`cpu.governor`): for safety TurboShift only hands work to polkit when the binary is root-owned and not writable by your user, so that tweak shows as unavailable until you `sudo make install` (or install it system-wide some other way). See [SECURITY.md](SECURITY.md).
+Maintainers can produce static amd64/arm64 binaries with checksums via `make release`. You can also just run `./turbo` from the build folder. Everything works that way except the one administrator action (`cpu.governor`): for safety TurboShift only hands work to polkit when the binary is root-owned and not writable by your user, so that tweak shows as unavailable until you `sudo make install` (or install it system-wide some other way). See [SECURITY.md](SECURITY.md).
 
 Uninstall with `sudo make uninstall`. TurboShift keeps its data in your XDG directories (`~/.config/turboshift`, `~/.local/state/turboshift`, `~/.local/share/turboshift`); delete them to remove everything it ever stored.
 

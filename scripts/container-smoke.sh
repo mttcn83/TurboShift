@@ -40,7 +40,7 @@ run "doctor"                         0 turbo doctor
 run "doctor --json"                  0 turbo doctor --json;       has "valid-looking JSON" '"findings"'
 run "doctor has no ANSI when piped"  0 turbo doctor;              ! grep -q "$(printf '\033')" /tmp/out && pass "no escape codes in piped output" || bad "escape codes in piped output"
 run "status"                         0 turbo status
-run "tweaks list"                    0 turbo tweaks list;         has "lists a category" 'Network'
+run "tweaks list"                    0 turbo tweaks list;         has "hides unavailable tweaks" 'not available on this PC'
 run "tweaks list --all"              0 turbo tweaks list --all;   has "lists power.profile" 'power.profile'
 run "undo with nothing to undo"      0 turbo undo;                has "friendly empty state" 'Nothing to undo'
 run "tweaks list --json"             0 turbo tweaks list --json;  has "json rows" '"ID"'

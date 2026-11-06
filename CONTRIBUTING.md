@@ -6,6 +6,7 @@ Thanks for helping. TurboShift is intentionally small; the quality bar matters m
 
 ```bash
 make check     # gofmt + go vet + go test -race ./...
+make kernel-test   # apply/verify/restore/rollback against a real kernel, in a throw-away namespace
 make build     # ./turbo
 ```
 

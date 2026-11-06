@@ -1,5 +1,31 @@
 # Changelog
 
+## 1.0.0
+
+First stable release. The 54 optimizations, presets and one-key goals from 0.3.0 are unchanged; 1.0 is about trust: a real-kernel test, a hardened helper, a stable contract and the bugs that testing found.
+
+**Breaking changes from 0.3.0 (the only time they will be made without a new major version, see [docs/STABILITY.md](docs/STABILITY.md)):**
+
+- Every `--json` document is now an object with `"schema_version": 1` and `snake_case` keys throughout. `tweaks list --json` and `preset list --json` used to print a bare array with `PascalCase` keys; they now print `{"schema_version":1,"tweaks":[...]}` / `{"schema_version":1,"presets":[...]}` with `id`, `name`, ... `network --json` destinations, `top_processes` and `benchmark compare --json` metrics were renamed the same way. Empty lists are `[]`, not `null`. `benchmark list --json` is new.
+
+**Fixed**
+
+- The "terminal too small" notice was one 79-column line, so it overflowed exactly the terminals it was meant for. It now wraps to the terminal and never draws more rows than exist. (Found by the new random-input torture test.)
+- `turbo tweaks show` printed the current value as a raw Go map (`map[tcp_ecn:2]`); it now prints the state in words ("CUBIC", "Never suspend"), like the app does.
+- Asking for BBR when `tcp_bbr` is not loaded said only `allowed: cubic, reno`. It now says BBR is a kernel module that is not loaded and gives the `modprobe` command.
+- Restore points now carry a `format` number. A file from a newer format is refused with a clear message instead of being misread; every older file (back to 0.1) still loads and restores (covered by a test).
+
+**Added**
+
+- `turbo completion bash|fish` (installed by `make install`): completes commands, flags, tweak IDs, presets and restore-point IDs.
+- `make kernel-test` / `scripts/kernel-test.sh`: apply, live verification, drift-aware restore, automatic rollback after a write the kernel refuses, and `undo`, against the real `/proc/sys` of a throw-away user+network namespace, with a check that the host's own settings are untouched.
+- Numeric ceilings in the root helper for the three settings where digits alone could do harm (`min_free_kbytes` 4 GiB, `max_map_count` 2^31-1, `tcp_notsent_lowat` 2^32-1), a fuzz test that no accepted request can leave `/proc/sys` and `/sys`, seeded random key/click/resize torture tests for the whole TUI, and a garbage-arguments test for the CLI.
+- [docs/STABILITY.md](docs/STABILITY.md): what scripts may rely on from 1.0.
+
+**Verified:** gofmt, `go vet`, staticcheck, `go test -race ./...`; 15 real-kernel checks passing (`make kernel-test`: five network tweaks plus the shared engine path, in a network namespace, host unchanged); ~15 million fuzz executions of the helper allowlist with no violation; 135 seeds x 600 random TUI events with no panic or overflow; the real binary in a pty at 110x34 and 80x24 (read-only); the 5-distribution container matrix as root and uid 1000.
+
+**Not verified (so not claimed):** that any tweak makes any workload faster (no benchmark is shipped; each tweak says how to measure it); applying CPU, power, GPU, disk, memory-timing and Hyprland/GNOME tweaks on real hardware (their files cannot be changed from a test namespace); the real polkit prompt and the polkit action; NetworkManager checkpoints; MangoHud logs; other distributions or non-x86 on real hardware.
+
 ## 0.3.0
 
 Catalogue grows from 26 to **54** optimizations, adds ready-made presets, and every description is rewritten in plain English.

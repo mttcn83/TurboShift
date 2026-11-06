@@ -42,8 +42,13 @@ run "doctor has no ANSI when piped"  0 turbo doctor;              ! grep -q "$(p
 run "status"                         0 turbo status
 run "tweaks list"                    0 turbo tweaks list;         has "hides unavailable tweaks" 'not available on this PC'
 run "tweaks list --all"              0 turbo tweaks list --all;   has "lists power.profile" 'power.profile'
+run "completion bash"                0 turbo completion bash;     has "bash completion" '_turbo'
+run "completion fish"                0 turbo completion fish;     has "fish completion" 'complete -c turbo'
+run "completion ids"                 0 turbo __complete tweaks;   has "tweak ids" 'net\.ecn'
+run "completion bad shell"           2 turbo completion tcsh
+run "version is 1.x"                 0 turbo --version;           has "1.0.0" '^turbo 1\.'
 run "undo with nothing to undo"      0 turbo undo;                has "friendly empty state" 'Nothing to undo'
-run "tweaks list --json"             0 turbo tweaks list --json;  has "json rows" '"ID"'
+run "tweaks list --json"             0 turbo tweaks list --json;  has "json rows" '"schema_version"'
 run "tweaks show"                    0 turbo tweaks show power.profile
 run "preset list"                    0 turbo preset list;         has "lists gaming" 'gaming'
 run "preset show"                    0 turbo preset show gaming;  has "counts what applies" 'apply on this PC'

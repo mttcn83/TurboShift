@@ -54,9 +54,9 @@ func (o NetOptions) withDefaults() NetOptions {
 // Destination is one network target a run would contact, shown to the user
 // before anything is sent.
 type Destination struct {
-	Host     string
-	Purpose  string
-	External bool
+	Host     string `json:"host"`
+	Purpose  string `json:"purpose"`
+	External bool   `json:"external"`
 }
 
 // PlanDestinations lists exactly what Collect would contact for these options.

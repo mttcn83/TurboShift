@@ -238,10 +238,10 @@ func ParseNvidiaSMI(s GPUSample, out string) GPUSample {
 // ---- top processes ------------------------------------------------------
 
 type Proc struct {
-	PID    int
-	Name   string
-	CPUPct float64 // of one core
-	RSSMiB float64
+	PID    int     `json:"pid"`
+	Name   string  `json:"name"`
+	CPUPct float64 `json:"cpu_pct"` // of one core
+	RSSMiB float64 `json:"rss_mib"`
 }
 
 // clockTicks is USER_HZ, which is 100 on every mainstream Linux build.

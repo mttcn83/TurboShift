@@ -278,3 +278,16 @@ func TestDNSFailureRollsBackAndTamperedJournalCannotInject(t *testing.T) {
 		}
 	}
 }
+
+func TestMissingBBRExplainsHowToEnableIt(t *testing.T) {
+	r := newRig(t, func(m *simtest.Machine) {
+		m.FS.Set("/proc/sys/net/ipv4/tcp_congestion_control", "cubic\n").Set("/proc/sys/net/ipv4/tcp_available_congestion_control", "reno cubic\n")
+	})
+	_, err := r.eng.Apply(ctx, []Request{{"net.tcp-cc", map[string]string{"algorithm": "bbr"}}}, "t", nil)
+	if err == nil || !strings.Contains(err.Error(), "modprobe tcp_bbr") || !strings.Contains(err.Error(), "cubic, reno") {
+		t.Fatalf("want a modprobe hint naming what is available, got %v", err)
+	}
+	if len(r.priv.Actions) != 0 {
+		t.Error("wrote despite refusal")
+	}
+}

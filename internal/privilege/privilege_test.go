@@ -479,3 +479,56 @@ func TestPolkitPolicyCoversOnlyTheHelper(t *testing.T) {
 		t.Error("only an active local session may keep the authorisation; remote and inactive sessions must always be asked")
 	}
 }
+
+func TestCeilingsRefuseHarmfulMagnitudes(t *testing.T) {
+	ok := []Action{
+		{OpWriteSysfs, "/proc/sys/vm/min_free_kbytes", "4194304"},
+		{OpWriteSysfs, "/proc/sys/vm/min_free_kbytes", "67584"},
+		{OpWriteSysfs, "/proc/sys/vm/max_map_count", "2147483647"},
+		{OpWriteSysfs, "/proc/sys/net/ipv4/tcp_notsent_lowat", "4294967295"},
+	}
+	bad := []Action{
+		{OpWriteSysfs, "/proc/sys/vm/min_free_kbytes", "4194305"},
+		{OpWriteSysfs, "/proc/sys/vm/min_free_kbytes", "99999999"},
+		{OpWriteSysfs, "/proc/sys/vm/max_map_count", "2147483648"},
+		{OpWriteSysfs, "/proc/sys/net/ipv4/tcp_notsent_lowat", "4294967296"},
+		{OpWriteSysfs, "/proc/sys/net/ipv4/tcp_notsent_lowat", "9999999999"},
+	}
+	for _, a := range ok {
+		if err := Validate(a); err != nil {
+			t.Errorf("%v should pass: %v", a, err)
+		}
+	}
+	for _, a := range bad {
+		if err := Validate(a); err == nil {
+			t.Errorf("%v must be refused", a)
+		}
+	}
+}
+
+// FuzzValidate: whatever bytes arrive, an accepted action must be a clean
+// absolute path under /proc/sys or /sys with a short single-line value.
+func FuzzValidate(f *testing.F) {
+	for _, r := range rules {
+		f.Add(r.path.String(), "1")
+	}
+	f.Add("/proc/sys/vm/swappiness", "10")
+	f.Add("/proc/sys/vm/swappiness", "10\n")
+	f.Add("/proc/sys/vm/../../etc/passwd", "1")
+	f.Add("/sys/block/sda/queue/scheduler", "none; reboot")
+	f.Fuzz(func(t *testing.T, path, value string) {
+		a := Action{Op: OpWriteSysfs, Path: path, Value: value}
+		if Validate(a) != nil {
+			return
+		}
+		if !strings.HasPrefix(path, "/proc/sys/") && !strings.HasPrefix(path, "/sys/") {
+			t.Fatalf("accepted a path outside /proc/sys and /sys: %q", path)
+		}
+		if filepath.Clean(path) != path || strings.ContainsAny(path, "\x00\n") || strings.Contains(path, "..") {
+			t.Fatalf("accepted an unclean path: %q", path)
+		}
+		if len(value) == 0 || len(value) > 32 || strings.ContainsAny(value, "\x00\n\r ;|&$`'\"\\/") {
+			t.Fatalf("accepted a suspicious value %q for %s", value, path)
+		}
+	})
+}

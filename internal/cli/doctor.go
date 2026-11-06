@@ -12,9 +12,10 @@ import (
 )
 
 type doctorJSON struct {
-	Report   detect.Report         `json:"report"`
-	Findings []diagnostics.Finding `json:"findings"`
-	Top      []diagnostics.Proc    `json:"top_processes,omitempty"`
+	SchemaVersion int                   `json:"schema_version"`
+	Report        detect.Report         `json:"report"`
+	Findings      []diagnostics.Finding `json:"findings"`
+	Top           []diagnostics.Proc    `json:"top_processes,omitempty"`
 }
 
 func cmdDoctor(ctx context.Context, a *app.App, args []string, o *out) int {
@@ -31,7 +32,7 @@ func cmdDoctor(ctx context.Context, a *app.App, args []string, o *out) int {
 		procs = diagnostics.TopProcesses(ctx, a.FS, 5, time.Second)
 	}
 	if *asJSON {
-		return o.json(doctorJSON{rep, findings, procs})
+		return o.json(doctorJSON{schemaVersion, rep, findings, procs})
 	}
 
 	o.heading("doctor")
@@ -155,7 +156,7 @@ func cmdStatus(ctx context.Context, a *app.App, args []string, o *out) int {
 	w, n := diagnostics.Counts(findings)
 	if *asJSON {
 		return o.json(map[string]any{
-			"warnings": w, "notices": n, "snapshots": len(snaps), "interrupted": len(pend), "corrupt_snapshots": len(corrupt),
+			"schema_version": schemaVersion, "warnings": w, "notices": n, "snapshots": len(snaps), "interrupted": len(pend), "corrupt_snapshots": len(corrupt),
 		})
 	}
 	o.heading("status")

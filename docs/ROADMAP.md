@@ -26,6 +26,7 @@ The first 54 are shipped (see the README). Still candidates:
 
 ## Verification debt
 
+- A hardware-in-the-loop run of the CPU, power, disk and memory tweaks on more machines (the namespace test covers only the network ones).
 - Real-hardware apply/rollback runs on more distributions.
 - Real polkit and NetworkManager checkpoint verification.
 - Real MangoHud log fixtures in the test suite.

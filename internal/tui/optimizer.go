@@ -2,7 +2,6 @@ package tui
 
 import (
 	"fmt"
-	"sort"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -30,43 +29,9 @@ func tierTag(t tweaks.Tier) string {
 	return "ADV"
 }
 
-// stateSummary condenses a tweak's state map into a short value ("balanced",
-// or "powersave/performance" when per-core values differ).
-func stateSummary(s tweaks.State) string {
-	seen := map[string]bool{}
-	var vals []string
-	for _, v := range s {
-		if !seen[v] {
-			seen[v] = true
-			vals = append(vals, v)
-		}
-	}
-	sort.Strings(vals)
-	if len(vals) == 0 {
-		return "?"
-	}
-	return strings.Join(vals, "/")
-}
-
-// summaryOf describes a tweak's current state in a few words.
-func summaryOf(t tweaks.Tweak, s tweaks.State) string {
-	if sm, ok := t.(tweaks.Summarizer); ok {
-		return sm.Summary(s)
-	}
-	return stateSummary(s)
-}
-
-// humanState is summaryOf with a raw value swapped for its option label
-// ("-1" becomes "Never suspend") when the tweak is in a single known state.
-func humanState(t tweaks.Tweak, as tweaks.Assessment) string {
-	s := summaryOf(t, as.Current)
-	for _, o := range optionsOf(t.Meta(), as) {
-		if o.Value == s {
-			return o.Label
-		}
-	}
-	return s
-}
+// humanState describes a tweak's current state in a few words, with a raw
+// value swapped for its option label ("-1" becomes "Never suspend").
+func humanState(t tweaks.Tweak, as tweaks.Assessment) string { return tweaks.Describe(t, as) }
 
 // alreadyAt reports whether every part of the tweak already has the value.
 func alreadyAt(as tweaks.Assessment, v string) bool {

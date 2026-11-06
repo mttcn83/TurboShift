@@ -47,6 +47,8 @@ turbo
 
 Maintainers can produce static amd64/arm64 binaries with checksums via `make release`. You can also just run `./turbo` from the build folder. Everything works that way except the one administrator action (every tweak marked *Admin: yes*): for safety TurboShift only hands work to polkit when the binary is root-owned and not writable by your user, so those tweaks show as unavailable until you `sudo make install` (or install it system-wide some other way). See [SECURITY.md](SECURITY.md).
 
+`sudo make install` also installs tab completion for **bash and fish** (`turbo completion bash|fish` prints the scripts if you prefer to place them yourself); it completes commands, tweak IDs, presets and restore-point IDs.
+
 Uninstall with `sudo make uninstall`. TurboShift keeps its data in your XDG directories (`~/.config/turboshift`, `~/.local/state/turboshift`, `~/.local/share/turboshift`); delete them to remove everything it ever stored.
 
 ## The app
@@ -221,24 +223,25 @@ TurboShift changes system settings. It previews every change, keeps a restore po
 
 ## Status and honesty
 
-Version `0.2.0` (public pre-release). What has been **verified**:
+Version `1.0.0`. The command line, tweak and preset IDs, exit codes, `--json` documents and restore-point files are covered by a [stability promise](docs/STABILITY.md). What has been **verified**, and how:
 
-- Unit and integration tests (`make test`, run with the race detector): detection against fake `/proc` and `/sys`, the transaction engine (apply, verify, rollback, drift, crash recovery, locking, concurrency, cancellation), the privilege allowlist, diagnostics, benchmark statistics, CLI behaviour and exit codes, and the TUI driven end to end (scan → preview → apply → verify → undo, mouse hit-testing, every screen at 64×18 up to 200×50, no-colour and ASCII output).
-- The real binary run in a pseudo-terminal on an Arch-based machine, **read-only**: dashboard, scan, doctor, optimizer preview, all screens, dialogs, quit.
-- A clean-install smoke test plus the whole unit-test suite in disposable containers on **Arch, Ubuntu 24.04, Debian 12, Fedora 42 and openSUSE Tumbleweed**, as root and as an ordinary user (`scripts/distro-test.sh`): install, `--help`/`--version`, doctor/status/tweaks/snapshots/benchmark/game/network commands, clean refusal on unsupported hardware, privileged-helper refusals, and the TUI driven in a pseudo-terminal at 80×24 and a large size.
+- **Unit and integration tests** (`make test`, with the race detector): detection against fake `/proc` and `/sys`, the transaction engine (apply, verify, rollback, drift, crash recovery, locking, cancellation), the privilege allowlist (including a fuzz test that no accepted request can leave `/proc/sys` and `/sys`), diagnostics, benchmark statistics, CLI behaviour, exit codes and JSON contracts, restoring a restore point written by the first release, and the TUI driven end to end (scan → preview → apply → verify → undo, mouse hit-testing, every screen from 64×18 to 200×60, no-colour and ASCII output) plus seeded random key/click/resize torture runs.
+- **A real kernel** (`make kernel-test`): apply, live verification, drift-aware restore, automatic rollback after a refused write, and `undo`, run against the real `/proc/sys` of a throw-away network namespace (so your system's settings are never touched). It exercises the five network tweaks that namespace allows (`net.notsent-lowat`, `net.ecn`, `net.mtu-probing`, `net.tcp-idle`, `net.tcp-fastopen`) and the shared engine path every kernel tweak uses.
+- **The real binary in a pseudo-terminal** on an Arch-based laptop (CachyOS, Hyprland), read-only: dashboard, goals, scan, doctor, Optimizer, presets, dialogs, quit.
+- **A clean-install smoke test plus the whole unit-test suite in disposable containers** on Arch, Ubuntu 24.04, Debian 12, Fedora 42 and openSUSE Tumbleweed, as root and as an ordinary user (`scripts/distro-test.sh`).
 
 What has **not** been verified, and is therefore not claimed:
 
-- Applying changes on a real system (all apply/rollback logic is tested against a simulated machine, not real `powerprofilesctl`/`nmcli`).
-- Real NetworkManager checkpoints, and the real `pkexec`/polkit prompt flow.
-- Importing real MangoHud logs (the parser follows MangoHud's source; no real log was available).
-- Real hardware on other distributions (containers have no power manager, Wi-Fi or GPU, so this proves install, detection and graceful degradation there, not the tweaks themselves), AMD/Intel-only GPUs.
+- **Performance gains.** No benchmark in this repository shows any tweak making any workload faster. Each tweak states the mechanism, the trade-off and how to measure it on your PC (Benchmark Lab helps); the result is yours to judge.
+- Applying the CPU, power, GPU, disk, memory-timing and Hyprland/GNOME tweaks on real hardware (they use the same tested engine, but their kernel files cannot be changed from a test namespace).
+- The real `pkexec`/polkit prompt flow and the polkit action file, real NetworkManager checkpoints, real MangoHud logs.
+- Real hardware on other distributions, AMD-only or Intel-only GPUs, ARM.
 
 See [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md). Please report what you find.
 
 ## Documentation
 
-[Architecture](docs/ARCHITECTURE.md) · [Recovery](docs/RECOVERY.md) · [Benchmark methodology](docs/BENCHMARK_METHODOLOGY.md) · [Compatibility](docs/COMPATIBILITY.md) · [Roadmap](docs/ROADMAP.md) · [Release process](docs/RELEASE.md) · [Privacy](PRIVACY.md) · [Security](SECURITY.md) · [Third-party licences](THIRD_PARTY_NOTICES.md) · [Contributing](CONTRIBUTING.md) · [Changelog](CHANGELOG.md)
+[Architecture](docs/ARCHITECTURE.md) · [Recovery](docs/RECOVERY.md) · [Benchmark methodology](docs/BENCHMARK_METHODOLOGY.md) · [Compatibility](docs/COMPATIBILITY.md) · [Stability promise](docs/STABILITY.md) · [Roadmap](docs/ROADMAP.md) · [Release process](docs/RELEASE.md) · [Privacy](PRIVACY.md) · [Security](SECURITY.md) · [Third-party licences](THIRD_PARTY_NOTICES.md) · [Contributing](CONTRIBUTING.md) · [Changelog](CHANGELOG.md)
 
 ## License
 

@@ -1,6 +1,6 @@
 # Release process
 
-1. `make check` must pass (gofmt, vet, `go test -race`).
+1. `make check` must pass (gofmt, vet, `go test -race`), as must `make kernel-test` (real-kernel round trip in a throw-away namespace) and, before a release, `make distro-test`.
 2. Update `internal/version/version.go` and `CHANGELOG.md` (user-visible changes, and what is still unverified).
 3. Smoke-test the *installed* binary, not `go run`:
    ```bash
@@ -12,4 +12,4 @@
 5. Tag `vX.Y.Z`; build static, stripped binaries with `go build -trimpath -ldflags "-s -w"` for `linux/amd64` and `linux/arm64`; publish them with SHA-256 checksums.
 6. Packaging (AUR, Nix, Flatpak is not applicable) follows a stable release; the binary has no runtime dependencies beyond the optional tools.
 
-Versioning: `0.x` until the JSON schemas (`detect` report, `doctor --json`, snapshot files) are declared stable; snapshot files carry a version so older restore points remain restorable.
+Versioning: semantic versioning from 1.0.0. What counts as the public contract (CLI commands, IDs, exit codes, `--json` documents, restore-point files) is in [STABILITY.md](STABILITY.md); a change to any of it needs a new major version, a bumped `schema_version`/`format`, and a CHANGELOG entry saying so.

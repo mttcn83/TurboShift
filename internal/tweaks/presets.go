@@ -6,8 +6,8 @@ package tweaks
 // machine are skipped (and reported) rather than forced.
 
 type PresetItem struct {
-	TweakID string
-	Value   string // the option value for the tweak's single parameter
+	TweakID string `json:"tweak_id"`
+	Value   string `json:"value"` // the option value for the tweak's single parameter
 }
 
 type Preset struct {

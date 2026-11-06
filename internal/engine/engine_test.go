@@ -2,6 +2,9 @@ package engine
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -577,4 +580,48 @@ func TestRecommendations(t *testing.T) {
 	if as := w.Assess(ctx, r2.eng.Env); as.Recommend == nil || w.Meta().Tier != tweaks.TierSituational {
 		t.Errorf("wifi: %+v", as)
 	}
+}
+
+// A restore point written by 0.1.x (no "format" key, only the three original
+// tweaks) must still restore on a current build. The JSON below is the 0.1.1
+// layout; its checksum is computed the way 0.1.1 did, over the struct with an
+// empty checksum.
+func TestRestoresARestorePointFromTheFirstRelease(t *testing.T) {
+	r := newRig(t, func(m *simtest.Machine) { m.PPDProfile = "performance" })
+	old := &snapshot.Snapshot{
+		ID: "20260101T000000Z-aabbcc", Label: "cli", Status: snapshot.StatusCommitted,
+		CreatedAt: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), UpdatedAt: time.Date(2026, 1, 1, 0, 0, 1, 0, time.UTC),
+		Items: []snapshot.Item{{
+			TweakID: "power.profile", Name: "Power profile", Params: map[string]string{"profile": "performance"},
+			Before: map[string]string{"profile": "balanced"}, After: map[string]string{"profile": "performance"},
+			Status: snapshot.ItemVerified,
+		}},
+	}
+	sum := sha256.Sum256(mustJSON(t, old))
+	old.Checksum = hex.EncodeToString(sum[:])
+	b, _ := json.MarshalIndent(old, "", "  ")
+	if strings.Contains(string(b), `"format"`) {
+		t.Fatal("the legacy fixture must not carry a format key")
+	}
+	if err := os.MkdirAll(r.eng.Store.Dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(r.eng.Store.Dir, old.ID+".json"), b, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.eng.Restore(ctx, old.ID, RestoreOptions{}, nil); err != nil {
+		t.Fatalf("restoring a 0.1.x restore point: %v", err)
+	}
+	if r.m.PPDProfile != "balanced" {
+		t.Errorf("profile = %q, want balanced", r.m.PPDProfile)
+	}
+}
+
+func mustJSON(t *testing.T, v any) []byte {
+	t.Helper()
+	b, err := json.Marshal(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return b
 }

@@ -428,6 +428,9 @@ func TCPCongestion() Tweak {
 			Evidence: "Network Doctor's download load test: compare throughput and latency under load before and after, over several runs.",
 			Category: CatNetwork, Tier: TierAdvanced, Risk: RiskLow, Scope: ScopeUntilBoot,
 			NeedsAuth: true, ParamName: "algorithm", Options: tcpOptions,
+			HowToEnable: map[string]string{
+				"bbr": "BBR is a kernel module that is not loaded: run `sudo modprobe tcp_bbr` (add tcp_bbr to /etc/modules-load.d/ to keep it), then try again.",
+			},
 		},
 		gate: func(Env) string { return "" },
 		targets: func(env Env) map[string]string {

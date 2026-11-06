@@ -121,12 +121,15 @@ type Meta struct {
 	// ParamName/Options describe the single user-selectable parameter.
 	ParamName string
 	Options   []Option
+	// HowToEnable says what to do when a known option is missing on this
+	// machine (value -> advice), e.g. BBR needs its kernel module loaded.
+	HowToEnable map[string]string
 }
 
 // Recommendation is advice produced from live state, with the reason shown to the user.
 type Recommendation struct {
-	Params map[string]string
-	Why    string
+	Params map[string]string `json:"params"`
+	Why    string            `json:"why"`
 }
 
 // Assessment is a tweak's answer to "does this apply to this machine, now?".
@@ -199,6 +202,41 @@ type Guarded interface {
 // whose state is several settings that read badly when simply joined.
 type Summarizer interface {
 	Summary(State) string
+}
+
+// Describe says in a few words what state a tweak is in right now: the
+// tweak's own summary (or its distinct values joined, "powersave/performance"
+// when per-core values differ), with a raw value swapped for its option label
+// ("-1" becomes "Never suspend").
+func Describe(t Tweak, as Assessment) string {
+	var s string
+	if sm, ok := t.(Summarizer); ok {
+		s = sm.Summary(as.Current)
+	} else {
+		seen := map[string]bool{}
+		var vals []string
+		for _, v := range as.Current {
+			if !seen[v] {
+				seen[v] = true
+				vals = append(vals, v)
+			}
+		}
+		sort.Strings(vals)
+		s = "?"
+		if len(vals) > 0 {
+			s = strings.Join(vals, "/")
+		}
+	}
+	opts := as.Options
+	if len(opts) == 0 {
+		opts = t.Meta().Options
+	}
+	for _, o := range opts {
+		if o.Value == s && o.Label != "" {
+			return o.Label
+		}
+	}
+	return s
 }
 
 // Checker is an optional extra check of the *effective* result, for tweaks
@@ -365,6 +403,9 @@ func CheckParam(m Meta, opts []Option, v string) error {
 	vals := make([]string, len(opts))
 	for i, o := range opts {
 		vals[i] = o.Value
+	}
+	if how := m.HowToEnable[v]; how != "" {
+		return fmt.Errorf("%w: %s=%q is not available on this machine (available here: %s). %s", ErrInvalidParam, m.ParamName, v, strings.Join(vals, ", "), how)
 	}
 	return fmt.Errorf("%w: %s=%q (allowed: %s)", ErrInvalidParam, m.ParamName, v, strings.Join(vals, ", "))
 }

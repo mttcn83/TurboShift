@@ -1,9 +1,11 @@
 # TurboShift: small, dependency-light Go project. `make` builds ./turbo.
 PREFIX ?= /usr/local
 POLKIT_DIR ?= /usr/share/polkit-1/actions
+BASH_COMP_DIR ?= /usr/share/bash-completion/completions
+FISH_COMP_DIR ?= /usr/share/fish/vendor_completions.d
 GO     ?= go
 
-.PHONY: all build test vet fmt check distro-test notices release install uninstall clean
+.PHONY: all build test vet fmt check kernel-test distro-test notices release install uninstall clean
 
 all: build
 
@@ -21,6 +23,11 @@ fmt:
 
 # Everything CI runs.
 check: fmt vet test
+
+# Apply/verify/restore/rollback against a real kernel inside a throw-away
+# network namespace (host settings are never touched).
+kernel-test: build
+	scripts/kernel-test.sh ./turbo
 
 # Disposable-container install + smoke + unit tests on five distributions.
 distro-test:
@@ -43,9 +50,14 @@ install: build
 	install -d $(DESTDIR)$(POLKIT_DIR)
 	sed 's|@BINARY@|$(PREFIX)/bin/turbo|' packaging/polkit/io.github.mttcn83.turboshift.policy.in > $(DESTDIR)$(POLKIT_DIR)/io.github.mttcn83.turboshift.policy
 	chmod 644 $(DESTDIR)$(POLKIT_DIR)/io.github.mttcn83.turboshift.policy
+	install -d $(DESTDIR)$(BASH_COMP_DIR) $(DESTDIR)$(FISH_COMP_DIR)
+	./turbo completion bash > $(DESTDIR)$(BASH_COMP_DIR)/turbo
+	./turbo completion fish > $(DESTDIR)$(FISH_COMP_DIR)/turbo.fish
+	chmod 644 $(DESTDIR)$(BASH_COMP_DIR)/turbo $(DESTDIR)$(FISH_COMP_DIR)/turbo.fish
 
 uninstall:
-	rm -f $(DESTDIR)$(PREFIX)/bin/turbo $(DESTDIR)$(POLKIT_DIR)/io.github.mttcn83.turboshift.policy
+	rm -f $(DESTDIR)$(PREFIX)/bin/turbo $(DESTDIR)$(POLKIT_DIR)/io.github.mttcn83.turboshift.policy \
+		$(DESTDIR)$(BASH_COMP_DIR)/turbo $(DESTDIR)$(FISH_COMP_DIR)/turbo.fish
 
 clean:
 	rm -f turbo

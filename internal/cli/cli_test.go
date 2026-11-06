@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"fmt"
 	"github.com/mttcn83/turboshift/internal/app"
 	"github.com/mttcn83/turboshift/internal/benchmark"
 	"github.com/mttcn83/turboshift/internal/config"
@@ -18,6 +19,9 @@ import (
 	"github.com/mttcn83/turboshift/internal/simtest"
 	"github.com/mttcn83/turboshift/internal/snapshot"
 	"github.com/mttcn83/turboshift/internal/tweaks"
+	"math/rand"
+	"os/exec"
+	"regexp"
 )
 
 func init() { tweaks.PollInterval = time.Millisecond }
@@ -119,9 +123,13 @@ func TestTweaksListAndShow(t *testing.T) {
 	if code != 0 {
 		t.Fatal(code)
 	}
-	var rows []struct{ ID string }
-	if err := json.Unmarshal([]byte(out), &rows); err != nil || len(rows) < 3 {
-		t.Fatalf("rows=%v err=%v", rows, err)
+	var doc struct {
+		Tweaks []struct {
+			ID string `json:"id"`
+		} `json:"tweaks"`
+	}
+	if err := json.Unmarshal([]byte(out), &doc); err != nil || len(doc.Tweaks) < 3 || doc.Tweaks[0].ID == "" {
+		t.Fatalf("rows=%v err=%v", doc.Tweaks, err)
 	}
 	if code, out, _ := r.run("tweaks", "show", "power.profile"); code != 0 || !strings.Contains(out, "Trade-off") {
 		t.Errorf("show: %d %q", code, out)
@@ -307,9 +315,11 @@ func TestPresetCommand(t *testing.T) {
 			t.Errorf("list is missing %s: %s", id, out)
 		}
 	}
-	var rows []map[string]any
-	if code, out, _ := r.run("preset", "list", "--json"); code != ExitOK || json.Unmarshal([]byte(out), &rows) != nil || len(rows) != 4 {
-		t.Errorf("json list: %d %q", code, out)
+	var doc struct {
+		Presets []map[string]any `json:"presets"`
+	}
+	if code, out, _ := r.run("preset", "list", "--json"); code != ExitOK || json.Unmarshal([]byte(out), &doc) != nil || len(doc.Presets) != 4 {
+		t.Errorf("json list: %d (%d presets)", code, len(doc.Presets))
 	}
 	if code, _, e := r.run("preset", "show", "nope"); code != ExitUsage || !strings.Contains(e, "unknown preset") {
 		t.Errorf("unknown preset: %d %q", code, e)
@@ -396,8 +406,151 @@ func TestTweaksListHidesUnavailableUnlessAsked(t *testing.T) {
 	if !strings.Contains(short, "not available on this PC") || len(full) <= len(short) || !strings.Contains(full, "unavailable") {
 		t.Errorf("default list should collapse unavailable tweaks:\n%s", short)
 	}
-	var rows []map[string]any
-	if _, out, _ := r.run("tweaks", "list", "--json"); json.Unmarshal([]byte(out), &rows) != nil || len(rows) < 50 {
-		t.Errorf("json must keep every tweak: %d", len(rows))
+	var doc struct {
+		Tweaks []map[string]any `json:"tweaks"`
+	}
+	if _, out, _ := r.run("tweaks", "list", "--json"); json.Unmarshal([]byte(out), &doc) != nil || len(doc.Tweaks) < 50 {
+		t.Errorf("json must keep every tweak: %d", len(doc.Tweaks))
+	}
+}
+
+func TestTweaksShowNeverPrintsGoMaps(t *testing.T) {
+	r := newRig(t)
+	r.mach.FS.Set("/proc/sys/net/ipv4/tcp_ecn", "2\n")
+	for _, id := range []string{"net.ecn", "power.profile", "net.tcp-cc"} {
+		_, out, _ := r.run("tweaks", "show", id)
+		if strings.Contains(out, "map[") {
+			t.Errorf("%s leaks a Go map:\n%s", id, out)
+		}
+	}
+}
+
+func TestCompletionScriptsAreValidAndKnowEveryCommand(t *testing.T) {
+	r := newRig(t)
+	for _, c := range topCommands {
+		if c.name == "completion" {
+			continue
+		}
+		if _, _, e := r.run(c.name, "--help"); strings.Contains(e, "unknown command") {
+			t.Errorf("completion advertises %q but the CLI does not know it", c.name)
+		}
+	}
+	for shell, check := range map[string][]string{"bash": {"bash", "-n"}, "fish": {"fish", "-n"}} {
+		code, script, _ := r.run("completion", shell)
+		if code != ExitOK || !strings.Contains(script, "turbo") {
+			t.Fatalf("%s: %d %q", shell, code, script)
+		}
+		for _, c := range topCommands {
+			if !strings.Contains(script, c.name) {
+				t.Errorf("%s completion lacks %q", shell, c.name)
+			}
+		}
+		bin, err := exec.LookPath(check[0])
+		if err != nil {
+			t.Logf("%s not installed: syntax of its script not checked", shell)
+			continue
+		}
+		f := filepath.Join(t.TempDir(), "turbo."+shell)
+		os.WriteFile(f, []byte(script), 0o600)
+		if out, err := exec.Command(bin, check[1], f).CombinedOutput(); err != nil {
+			t.Errorf("%s rejects its completion script: %v\n%s", shell, err, out)
+		}
+	}
+	if code, _, _ := r.run("completion", "tcsh"); code != ExitUsage {
+		t.Errorf("unknown shell should be a usage error, got %d", code)
+	}
+	_, ids, _ := r.run("__complete", "tweak-values")
+	if !strings.Contains(ids, "net.ecn=\n") || !strings.Contains(ids, "power.profile=\n") {
+		t.Errorf("tweak ids missing: %q", ids)
+	}
+	_, ps, _ := r.run("__complete", "presets")
+	if strings.Fields(ps)[0] != "desktop" || !strings.Contains(ps, "gaming") {
+		t.Errorf("presets: %q", ps)
+	}
+}
+
+// The --json documents are a public contract (docs/STABILITY.md): every one is
+// an object that carries schema_version, uses snake_case keys all the way
+// down, and prints an empty list as [] rather than null.
+func TestJSONDocumentsFollowTheContract(t *testing.T) {
+	r := newRig(t)
+	snake := regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
+	var walk func(path string, v any)
+	walk = func(path string, v any) {
+		switch x := v.(type) {
+		case map[string]any:
+			for k, c := range x {
+				switch k {
+				case "current", "params", "before", "after": // state maps keyed by the tweak's own names (e.g. "ipv4.dns")
+					continue
+				}
+				if !snake.MatchString(k) {
+					t.Errorf("%s: key %q is not snake_case", path, k)
+				}
+				walk(path+"."+k, c)
+			}
+		case []any:
+			for i, c := range x {
+				walk(fmt.Sprintf("%s[%d]", path, i), c)
+			}
+		}
+	}
+	for _, args := range [][]string{
+		{"doctor", "--json"}, {"tweaks", "list", "--json"}, {"preset", "list", "--json"},
+		{"snapshots", "list", "--json"}, {"status", "--json"}, {"network", "--json"}, {"benchmark", "list", "--json"},
+	} {
+		name := strings.Join(args, " ")
+		code, out, e := r.run(args...)
+		if code != ExitOK && code != ExitPartial {
+			t.Errorf("%s: exit %d %s", name, code, e)
+			continue
+		}
+		var doc map[string]any
+		if err := json.Unmarshal([]byte(out), &doc); err != nil {
+			t.Errorf("%s: not a JSON object: %v\n%.200s", name, err, out)
+			continue
+		}
+		if doc["schema_version"] != float64(1) {
+			t.Errorf("%s: schema_version = %v", name, doc["schema_version"])
+		}
+		walk(name, doc)
+		for k, v := range doc {
+			if v == nil && k != "report" {
+				t.Errorf("%s: %q is null; use [] or omit", name, k)
+			}
+		}
+	}
+}
+
+// Garbage arguments must produce a documented exit code and a message, never
+// a panic. (network is left out: it really waits for its ping window.)
+func TestGarbageArgumentsNeverPanic(t *testing.T) {
+	r := newRig(t)
+	vocab := []string{"doctor", "status", "tweaks", "list", "show", "apply", "preset", "undo", "snapshots", "restore", "recover",
+		"benchmark", "import", "compare", "find", "game", "options", "run", "completion", "bash", "fish", "__complete", "__priv",
+		"--json", "--all", "--yes", "--dry-run", "--force", "--top", "--label", "--", "-", "", " ", "=", "a=", "=b", "a=b=c",
+		"net.ecn", "net.ecn=1", "net.ecn=", "power.profile=performance", "mem.swappiness=-5", "mem.swappiness=999999999999999999999",
+		"gaming", "maximum", "nope", "../../etc/passwd", "\x00", "ünïcode", "💥", "--gamemode", "--log", "-1", "0", "99999999999"}
+	rng := rand.New(rand.NewSource(42))
+	for i := 0; i < 3000; i++ {
+		n := 1 + rng.Intn(5)
+		args := make([]string, n)
+		for j := range args {
+			args[j] = vocab[rng.Intn(len(vocab))]
+		}
+		if args[0] == "" || args[0] == " " || args[0] == "__priv" || args[0] == "game" && len(args) > 1 && args[1] == "run" {
+			continue // __priv is the root helper (refuses non-root); game run would exec
+		}
+		func() {
+			defer func() {
+				if p := recover(); p != nil {
+					t.Fatalf("panic on %q: %v", args, p)
+				}
+			}()
+			stdinReader = func() io.Reader { return strings.NewReader("") }
+			if code, _, _ := r.run(args...); code < 0 || code > 3 {
+				t.Fatalf("%q exited %d, outside the documented 0-3", args, code)
+			}
+		}()
 	}
 }

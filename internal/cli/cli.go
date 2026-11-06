@@ -60,6 +60,7 @@ Games
   game run [same options] -- <command> [args...]
 
 Other
+  completion bash|fish           print a tab-completion script for your shell
   --version, --help
 
 Exit codes: 0 ok · 1 error · 2 usage · 3 rolled back / partially restored
@@ -103,6 +104,10 @@ func Run(ctx context.Context, a *app.App, args []string, stdout, stderr io.Write
 		return cmdBenchmark(ctx, a, rest, o)
 	case "game":
 		return cmdGame(ctx, a, rest, o)
+	case "completion":
+		return cmdCompletion(rest, o)
+	case "__complete":
+		return cmdComplete(ctx, a, rest, o)
 	}
 	fmt.Fprintf(stderr, "turbo: unknown command %q\n\n", cmd)
 	fmt.Fprint(stderr, usage)

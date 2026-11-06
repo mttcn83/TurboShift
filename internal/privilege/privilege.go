@@ -15,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"syscall"
 
@@ -125,6 +126,19 @@ var (
 	}
 )
 
+// ceilings bound the numeric size of values whose digits alone would allow
+// something harmful (a 95 GB free-memory reserve starves every program). They
+// sit well above anything a person or a distribution sets, so restoring an
+// existing value always passes.
+var ceilings = []struct {
+	path *regexp.Regexp
+	max  uint64
+}{
+	{regexp.MustCompile(`^/proc/sys/vm/min_free_kbytes$`), 4 << 20}, // 4 GiB
+	{regexp.MustCompile(`^/proc/sys/vm/max_map_count$`), 1<<31 - 1},
+	{regexp.MustCompile(`^/proc/sys/net/ipv4/tcp_notsent_lowat$`), 1<<32 - 1},
+}
+
 // ActiveChoice extracts the active entry from a "none [mq-deadline] kyber"
 // style listing; a plain value is returned trimmed.
 func ActiveChoice(s string) string {
@@ -167,6 +181,14 @@ func Validate(a Action) error {
 		}
 		if !r.val.MatchString(a.Value) {
 			return fmt.Errorf("%w: invalid value %q for %s", ErrDenied, a.Value, a.Path)
+		}
+		for _, c := range ceilings {
+			if !c.path.MatchString(a.Path) {
+				continue
+			}
+			if n, err := strconv.ParseUint(a.Value, 10, 64); err != nil || n > c.max {
+				return fmt.Errorf("%w: %q is above the safe limit of %d for %s", ErrDenied, a.Value, c.max, a.Path)
+			}
 		}
 		return nil
 	}

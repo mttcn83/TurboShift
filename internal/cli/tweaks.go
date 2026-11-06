@@ -27,19 +27,24 @@ func cmdTweaks(ctx context.Context, a *app.App, args []string, o *out) int {
 			return ExitUsage
 		}
 		type row struct {
-			ID, Name, Category, Tier, Risk, Scope string
-			Available                             bool
-			Current                               tweaks.State
-			Reason                                string
-			Recommended                           *tweaks.Recommendation
+			ID          string                 `json:"id"`
+			Name        string                 `json:"name"`
+			Category    string                 `json:"category"`
+			Tier        string                 `json:"tier"`
+			Risk        string                 `json:"risk"`
+			Scope       string                 `json:"scope"`
+			Available   bool                   `json:"available"`
+			Current     tweaks.State           `json:"current"`
+			Reason      string                 `json:"reason"`
+			Recommended *tweaks.Recommendation `json:"recommended"`
 		}
-		var rows []row
+		rows := []row{}
 		for _, t := range a.Reg.All() {
 			m, as := t.Meta(), t.Assess(ctx, env)
 			rows = append(rows, row{m.ID, m.Name, string(m.Category), string(m.Tier), m.Risk.String(), string(m.Scope), as.Available, as.Current, as.Reason, as.Recommend})
 		}
 		if *asJSON {
-			return o.json(rows)
+			return o.json(jsonDoc("tweaks", rows))
 		}
 		o.heading("tweaks")
 		cat, hidden := "", 0
@@ -88,7 +93,7 @@ func cmdTweaks(ctx context.Context, a *app.App, args []string, o *out) int {
 		f("Measure", m.Evidence)
 		f("Tier/Risk", fmt.Sprintf("%s · risk %s · %s · %s", m.Tier, m.Risk, m.Scope, map[bool]string{true: "needs administrator permission", false: "no root needed"}[m.NeedsAuth]))
 		if as.Available {
-			f("Now", fmt.Sprint(as.Current))
+			f("Now", tweaks.Describe(t, as))
 			opts := as.Options
 			if len(opts) == 0 {
 				opts = m.Options
@@ -210,7 +215,13 @@ func cmdSnapshots(ctx context.Context, a *app.App, args []string, o *out) int {
 			return fail(o, err)
 		}
 		if *asJSON {
-			return o.json(map[string]any{"snapshots": snaps, "corrupt": corrupt})
+			if snaps == nil {
+				snaps = []*snapshot.Snapshot{}
+			}
+			if corrupt == nil {
+				corrupt = []string{}
+			}
+			return o.json(map[string]any{"schema_version": schemaVersion, "snapshots": snaps, "corrupt": corrupt})
 		}
 		o.heading("snapshots")
 		if len(snaps) == 0 {

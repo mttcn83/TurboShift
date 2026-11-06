@@ -21,14 +21,18 @@ func cmdPreset(ctx context.Context, a *app.App, args []string, o *out) int {
 		}
 		if *asJSON {
 			type row struct {
-				ID, Name, Summary, Best, Cost string
-				Items                         []tweaks.PresetItem
+				ID      string              `json:"id"`
+				Name    string              `json:"name"`
+				Summary string              `json:"summary"`
+				Best    string              `json:"best"`
+				Cost    string              `json:"cost"`
+				Items   []tweaks.PresetItem `json:"items"`
 			}
-			var rows []row
+			rows := []row{}
 			for _, p := range tweaks.Presets() {
 				rows = append(rows, row{p.ID, p.Name, p.Summary, p.Best, p.Cost, p.Items})
 			}
-			return o.json(rows)
+			return o.json(jsonDoc("presets", rows))
 		}
 		o.heading("presets")
 		for _, p := range tweaks.Presets() {

@@ -61,6 +61,15 @@ func (o *out) sev(s diagnostics.Severity) string {
 	return o.green("OK    ")
 }
 
+// schemaVersion is the version of every top-level JSON document the CLI
+// prints. It only changes with a breaking change (see docs/STABILITY.md).
+const schemaVersion = 1
+
+// jsonDoc is the envelope for list-like documents: {"schema_version":1, ...}.
+func jsonDoc(kind string, v any) map[string]any {
+	return map[string]any{"schema_version": schemaVersion, kind: v}
+}
+
 func (o *out) json(v any) int {
 	enc := json.NewEncoder(o.w)
 	enc.SetIndent("", "  ")

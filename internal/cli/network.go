@@ -60,7 +60,10 @@ func cmdNetwork(ctx context.Context, a *app.App, args []string, o *out) int {
 		if !*ssid {
 			res.Link.SSID = ""
 		}
-		return o.json(res)
+		return o.json(struct {
+			SchemaVersion int `json:"schema_version"`
+			diagnostics.NetReport
+		}{schemaVersion, res})
 	}
 	o.println()
 	l := res.Link

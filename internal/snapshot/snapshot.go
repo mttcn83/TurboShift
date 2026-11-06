@@ -65,7 +65,13 @@ type Event struct {
 	Text string    `json:"text"`
 }
 
+// FormatVersion is the layout of a restore-point file. It only changes with a
+// layout change older versions cannot read; files from before the field
+// existed have no "format" key and are layout 1.
+const FormatVersion = 1
+
 type Snapshot struct {
+	Format    int       `json:"format,omitempty"`
 	ID        string    `json:"id"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
@@ -86,6 +92,7 @@ func (s *Snapshot) Log(now time.Time, text string) {
 var (
 	ErrNotFound = errors.New("snapshot not found")
 	ErrCorrupt  = errors.New("snapshot failed its integrity check")
+	ErrTooNew   = errors.New("snapshot was written by a newer TurboShift")
 	ErrLocked   = errors.New("another TurboShift operation is already running")
 	idRe        = regexp.MustCompile(`^[0-9A-Za-z_-]{1,64}$`)
 )
@@ -134,6 +141,7 @@ func (st *Store) Save(s *Snapshot) error {
 		return fmt.Errorf("create snapshot directory: %w", err)
 	}
 	s.UpdatedAt = st.now().UTC()
+	s.Format = FormatVersion
 	s.Checksum = checksum(*s)
 	b, err := json.MarshalIndent(s, "", "  ")
 	if err != nil {
@@ -193,6 +201,9 @@ func (st *Store) Load(id string) (*Snapshot, error) {
 	}
 	if s.ID != id || checksum(s) != s.Checksum {
 		return nil, fmt.Errorf("%w: %s", ErrCorrupt, id)
+	}
+	if s.Format > FormatVersion {
+		return nil, fmt.Errorf("%w: %s uses layout %d, this version reads up to %d (upgrade TurboShift to restore it)", ErrTooNew, id, s.Format, FormatVersion)
 	}
 	return &s, nil
 }

@@ -1,6 +1,7 @@
 package snapshot
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -146,5 +147,42 @@ func TestSaveFailsCleanlyWhenDirUnwritable(t *testing.T) {
 	st := &Store{Dir: filepath.Join(ro, "snaps")}
 	if err := st.Save(sample(st)); err == nil {
 		t.Error("expected error writing into read-only directory")
+	}
+}
+
+func TestRestorePointFormatVersioning(t *testing.T) {
+	st := &Store{Dir: t.TempDir()}
+	s := st.New("x")
+	if err := st.Save(s); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := st.Load(s.ID); err != nil || got.Format != FormatVersion {
+		t.Fatalf("a saved restore point carries format %d: %+v %v", FormatVersion, got, err)
+	}
+
+	// A file written before the field existed (no "format" key, checksum over
+	// the old layout) must still load.
+	legacy := st.New("old")
+	legacy.UpdatedAt = legacy.CreatedAt
+	legacy.Checksum = checksum(*legacy) // Format 0 is omitted from the JSON, as in old files
+	b, _ := json.MarshalIndent(legacy, "", "  ")
+	if strings.Contains(string(b), `"format"`) {
+		t.Fatal("a zero format must not be written")
+	}
+	if err := os.WriteFile(st.file(legacy.ID), b, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.Load(legacy.ID); err != nil {
+		t.Errorf("legacy restore point no longer loads: %v", err)
+	}
+
+	// A file from a future layout is refused with a clear reason, not misread.
+	future := st.New("new")
+	future.Format = FormatVersion + 1
+	future.Checksum = checksum(*future)
+	b, _ = json.MarshalIndent(future, "", "  ")
+	os.WriteFile(st.file(future.ID), b, 0o600)
+	if _, err := st.Load(future.ID); !errors.Is(err, ErrTooNew) {
+		t.Errorf("want ErrTooNew, got %v", err)
 	}
 }

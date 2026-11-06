@@ -43,9 +43,20 @@ func cmdBenchmark(ctx context.Context, a *app.App, args []string, o *out) int {
 		return code
 
 	case "list":
+		fs := newFlags("benchmark list", o)
+		asJSON := fs.Bool("json", false, "machine-readable output")
+		if _, err := parse(fs, args[1:]); err != nil {
+			return ExitUsage
+		}
 		runs, err := a.Bench.List()
 		if err != nil {
 			return fail(o, err)
+		}
+		if *asJSON {
+			if runs == nil {
+				runs = []benchmark.Run{}
+			}
+			return o.json(jsonDoc("runs", runs))
 		}
 		o.heading("benchmark runs")
 		if len(runs) == 0 {
@@ -92,10 +103,16 @@ func cmdBenchmark(ctx context.Context, a *app.App, args []string, o *out) int {
 		c := benchmark.Compare(pos[0], by[pos[0]], pos[1], by[pos[1]])
 		if *asJSON {
 			type mr struct {
-				Metric, Unit, Verdict, Reason string
-				NA, NB                        int
-				MedianA, MedianB, DeltaPct    float64
-				P                             *float64
+				Metric   string   `json:"metric"`
+				Unit     string   `json:"unit"`
+				Verdict  string   `json:"verdict"`
+				Reason   string   `json:"reason"`
+				NA       int      `json:"n_a"`
+				NB       int      `json:"n_b"`
+				MedianA  float64  `json:"median_a"`
+				MedianB  float64  `json:"median_b"`
+				DeltaPct float64  `json:"delta_pct"`
+				P        *float64 `json:"p"`
 			}
 			var rs []mr
 			for _, r := range c.Results {
@@ -106,7 +123,7 @@ func cmdBenchmark(ctx context.Context, a *app.App, args []string, o *out) int {
 				rs = append(rs, mr{r.Metric.Name, r.Metric.Unit, string(r.Verdict), r.Reason, r.NA, r.NB, r.MedianA, r.MedianB, r.DeltaPct, p})
 			}
 			v, why := c.Overall()
-			return o.json(map[string]any{"a": pos[0], "b": pos[1], "overall": string(v), "summary": why, "metrics": rs, "warnings": c.Warnings})
+			return o.json(map[string]any{"schema_version": schemaVersion, "a": pos[0], "b": pos[1], "overall": string(v), "summary": why, "metrics": rs, "warnings": c.Warnings})
 		}
 		o.heading(fmt.Sprintf("%s vs %s", pos[0], pos[1]))
 		for _, r := range c.Results {

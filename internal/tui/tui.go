@@ -7,11 +7,13 @@ package tui
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"strings"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/mttcn83/turboshift/internal/app"
 	"github.com/mttcn83/turboshift/internal/config"
@@ -370,12 +372,26 @@ const (
 	minH = 18
 )
 
+// tooSmall is the notice for a terminal under minW x minH. It wraps to the
+// width it has and never draws more rows than the terminal offers.
+func (m *Model) tooSmall() string {
+	width := max(m.w-2, 8)
+	msg := fmt.Sprintf("Terminal too small (%d×%d). TurboShift needs at least %d×%d: enlarge the window, or press q to quit.", m.w, m.h, minW, minH)
+	lines := strings.Split(ansi.Wrap(msg, width, ""), "\n")
+	if m.h > 0 && len(lines) > m.h {
+		lines = lines[:m.h]
+	}
+	for i, l := range lines {
+		lines[i] = " " + l
+	}
+	return m.th.Warn(strings.Join(lines, "\n"))
+}
+
 func (m *Model) View() tea.View {
 	var content string
 	m.hits = nil
 	if m.w < minW || m.h < minH {
-		content = m.th.Warn("\n  Terminal too small") + "\n\n  TurboShift needs at least " +
-			"64×18 cells. Enlarge the window or press q to quit.\n"
+		content = m.tooSmall()
 	} else {
 		content = m.render()
 	}

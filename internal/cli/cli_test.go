@@ -292,3 +292,112 @@ func TestPrivilegedHelperRefusesNonRootAndBadRequests(t *testing.T) {
 		t.Errorf("code=%d err=%q", code, e)
 	}
 }
+
+func TestPresetCommand(t *testing.T) {
+	r := newRig(t, func(m *simtest.Machine) { m.PPD = false; m.Tools["powerprofilesctl"] = false })
+	cc, avail := "/proc/sys/net/ipv4/tcp_congestion_control", "/proc/sys/net/ipv4/tcp_available_congestion_control"
+	r.mach.FS.Set(cc, "cubic\n").Set(avail, "reno cubic bbr\n")
+
+	code, out, _ := r.run("preset", "list")
+	if code != ExitOK {
+		t.Fatalf("list: %d", code)
+	}
+	for _, id := range []string{"gaming", "desktop", "network", "maximum"} {
+		if !strings.Contains(out, id) {
+			t.Errorf("list is missing %s: %s", id, out)
+		}
+	}
+	var rows []map[string]any
+	if code, out, _ := r.run("preset", "list", "--json"); code != ExitOK || json.Unmarshal([]byte(out), &rows) != nil || len(rows) != 4 {
+		t.Errorf("json list: %d %q", code, out)
+	}
+	if code, _, e := r.run("preset", "show", "nope"); code != ExitUsage || !strings.Contains(e, "unknown preset") {
+		t.Errorf("unknown preset: %d %q", code, e)
+	}
+	if code, _, _ := r.run("preset"); code != ExitUsage {
+		t.Errorf("bare preset must be a usage error: %d", code)
+	}
+
+	code, out, _ = r.run("preset", "show", "network")
+	if code != ExitOK || !strings.Contains(out, "APPLY") || !strings.Contains(out, "net.tcp-cc") || !strings.Contains(out, "apply on this PC") {
+		t.Errorf("show: %d %s", code, out)
+	}
+
+	// --dry-run changes nothing.
+	if code, out, _ = r.run("preset", "apply", "network", "--dry-run"); code != ExitOK || !strings.Contains(out, "Dry run") {
+		t.Errorf("dry run: %d %s", code, out)
+	}
+	if v, _ := r.mach.FS.Get(cc); strings.TrimSpace(v) != "cubic" {
+		t.Fatalf("dry run wrote %q", v)
+	}
+
+	code, out, e := r.run("preset", "apply", "network", "--yes")
+	if code != ExitOK || !strings.Contains(out, "DONE") {
+		t.Fatalf("apply: %d out=%s err=%s", code, out, e)
+	}
+	if v, _ := r.mach.FS.Get(cc); strings.TrimSpace(v) != "bbr" {
+		t.Errorf("preset did not apply: %q", v)
+	}
+	// Applying again: everything is already set.
+	if code, out, _ = r.run("preset", "apply", "network", "--yes"); code != ExitOK || !strings.Contains(out, "Nothing to do") {
+		t.Errorf("second apply: %d %s", code, out)
+	}
+	snaps, _, _ := r.app.Store.List()
+	if len(snaps) != 1 || snaps[0].Label != "preset:network" {
+		t.Fatalf("want one labelled restore point, got %+v", snaps)
+	}
+	if code, _, e := r.run("snapshots", "restore", snaps[0].ID); code != ExitOK {
+		t.Fatalf("restore: %d %s", code, e)
+	}
+	if v, _ := r.mach.FS.Get(cc); strings.TrimSpace(v) != "cubic" {
+		t.Errorf("restore left %q", v)
+	}
+}
+
+func TestUndoRevertsTheLatestChangeAndHelpShowsQuickStart(t *testing.T) {
+	r := newRig(t, func(m *simtest.Machine) { m.PPD = false; m.Tools["powerprofilesctl"] = false })
+	cc := "/proc/sys/net/ipv4/tcp_congestion_control"
+	r.mach.FS.Set(cc, "cubic\n").Set("/proc/sys/net/ipv4/tcp_available_congestion_control", "cubic bbr\n")
+
+	if code, out, _ := r.run("undo"); code != ExitOK || !strings.Contains(out, "Nothing to undo") {
+		t.Errorf("empty undo: %d %q", code, out)
+	}
+	if code, _, e := r.run("apply", "net.tcp-cc=bbr", "--yes"); code != ExitOK {
+		t.Fatalf("apply: %d %s", code, e)
+	}
+	stdinReader = func() io.Reader { return strings.NewReader("n\n") }
+	if code, out, _ := r.run("undo"); code != ExitOK || !strings.Contains(out, "Cancelled") {
+		t.Errorf("declined undo: %d %q", code, out)
+	}
+	if v, _ := r.mach.FS.Get(cc); strings.TrimSpace(v) != "bbr" {
+		t.Fatal("a declined undo must change nothing")
+	}
+	if code, out, e := r.run("undo", "--yes"); code != ExitOK || !strings.Contains(out, "net.tcp-cc") {
+		t.Fatalf("undo: %d %s %s", code, out, e)
+	}
+	if v, _ := r.mach.FS.Get(cc); strings.TrimSpace(v) != "cubic" {
+		t.Errorf("not undone: %q", v)
+	}
+	if _, out, _ := r.run("undo"); !strings.Contains(out, "Nothing to undo") {
+		t.Errorf("second undo should have nothing left: %q", out)
+	}
+	_, help, _ := r.run("--help")
+	for _, want := range []string{"Quick start", "turbo undo", "turbo preset apply gaming"} {
+		if !strings.Contains(help, want) {
+			t.Errorf("help is missing %q", want)
+		}
+	}
+}
+
+func TestTweaksListHidesUnavailableUnlessAsked(t *testing.T) {
+	r := newRig(t)
+	_, short, _ := r.run("tweaks", "list")
+	_, full, _ := r.run("tweaks", "list", "--all")
+	if !strings.Contains(short, "not available on this PC") || len(full) <= len(short) || !strings.Contains(full, "unavailable") {
+		t.Errorf("default list should collapse unavailable tweaks:\n%s", short)
+	}
+	var rows []map[string]any
+	if _, out, _ := r.run("tweaks", "list", "--json"); json.Unmarshal([]byte(out), &rows) != nil || len(rows) < 50 {
+		t.Errorf("json must keep every tweak: %d", len(rows))
+	}
+}

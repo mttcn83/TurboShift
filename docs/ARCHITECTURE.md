@@ -9,7 +9,9 @@ internal/cli         scriptable subcommands (secondary UX)
 internal/app         wires real adapters, stores and the engine together
 ─────────────────────────────────────────────────────────────────────────────
 internal/engine      transactions: preview → journal → apply → verify → rollback → restore
-internal/tweaks      the Tweak contract, registry and the concrete tweaks
+internal/tweaks      the Tweak contract, registry, presets and the concrete tweaks
+                     (filetweak.go: kernel files via the root helper; desktop.go: per-user
+                     settings via hyprctl/gsettings; one file per family of facts)
 internal/snapshot    journal / restore points (atomic, checksummed, locked)
 internal/privilege   the only root boundary: allowlisted actions, pkexec helper
 ─────────────────────────────────────────────────────────────────────────────

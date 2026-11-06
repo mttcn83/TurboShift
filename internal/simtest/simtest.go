@@ -39,6 +39,11 @@ type Machine struct {
 	Radio          string // "on" | "off" as iw reports
 	ReapplyApplies bool   // does `device reapply` push the setting to the radio?
 
+	// Hypr holds Hyprland's integer options; nil means Hyprland is not running.
+	Hypr map[string]int
+	// GSettings holds org.gnome.desktop.interface keys ("true"/"false").
+	GSettings map[string]string
+
 	Fail map[string]error // injected failures keyed by op name
 
 	Checkpoints, Destroyed, RolledBack int
@@ -216,6 +221,50 @@ func (m *Machine) Run(_ context.Context, name string, args ...string) (platform.
 
 	case "iw":
 		return ok("Power save: " + m.Radio + "\n")
+
+	case "hyprctl":
+		if m.Hypr == nil {
+			return bad("Couldn't connect to Hyprland")
+		}
+		switch args[0] {
+		case "getoption":
+			v, found := m.Hypr[args[1]]
+			if !found {
+				return ok("no such option\n")
+			}
+			return ok(fmt.Sprintf(`{"option": %q, "int": %d, "float": %d.000000, "str": "[[EMPTY]]", "set": true}`+"\n", args[1], v, v))
+		case "keyword":
+			if r, e, f := fail("hypr-keyword"); f {
+				return r, e
+			}
+			if _, found := m.Hypr[args[1]]; !found {
+				return ok("config option <" + args[1] + "> does not exist\n")
+			}
+			var n int
+			if _, err := fmt.Sscan(args[2], &n); err != nil {
+				return ok("invalid value\n")
+			}
+			m.Hypr[args[1]] = n
+			return ok("ok\n")
+		}
+
+	case "gsettings":
+		if len(m.GSettings) == 0 {
+			return bad("No such schema")
+		}
+		switch args[0] {
+		case "get":
+			if v, found := m.GSettings[args[2]]; found {
+				return ok(v + "\n")
+			}
+			return bad("No such key")
+		case "set":
+			if r, e, f := fail("gsettings-set"); f {
+				return r, e
+			}
+			m.GSettings[args[2]] = args[3]
+			return ok("")
+		}
 
 	case "busctl":
 		method := args[5]

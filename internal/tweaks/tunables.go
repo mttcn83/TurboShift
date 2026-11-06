@@ -47,9 +47,10 @@ var qdiscOptions = []Option{
 // DefaultQdisc selects the queueing discipline new network interfaces get.
 func DefaultQdisc() Tweak {
 	t := one(Meta{
-		ID: "net.qdisc", Name: "Default packet scheduler (qdisc)",
-		Summary:  "Pick how queued packets are scheduled on network interfaces, to keep latency low when the link is busy.",
-		Details:  "Writes net.core.default_qdisc. fq_codel and cake fight bufferbloat: the delay that builds up in queues while a download or upload saturates the link. It applies to interfaces created or re-activated afterwards (reconnect to apply it to the current one).",
+		ID: "net.qdisc", Name: "Less lag while downloading (fight bufferbloat)",
+		Summary:  "Keep ping low when the connection is busy by scheduling packets fairly.",
+		Details:  "Sets the default queueing discipline for network interfaces. fq_codel and cake fight bufferbloat: the delay that builds up in queues while a download or upload saturates the link. Applies to interfaces brought up afterwards (reconnect to apply it now).",
+		Helps:    "Anyone whose ping jumps while something downloads or uploads.",
 		Tradeoff: "A scheduler cannot fix bufferbloat that lives in your router's queue, only your own machine's. cake needs a little more CPU on very fast links.",
 		Evidence: "Network Doctor with a load test: compare latency under load before and after (and reconnect the interface first).",
 		Category: CatNetwork, Tier: TierAdvanced, Risk: RiskLow, Scope: ScopeUntilBoot,
@@ -66,9 +67,10 @@ var fastOpenOptions = []Option{
 // TCPFastOpen allows data in the SYN packet for repeat connections.
 func TCPFastOpen() Tweak {
 	return one(Meta{
-		ID: "net.tcp-fastopen", Name: "TCP Fast Open",
-		Summary:  "Skip one network round trip when reconnecting to servers you have visited before.",
-		Details:  "Writes net.ipv4.tcp_fastopen. With client support the first data goes out in the connection-opening packet once a cookie from the server is cached, which shaves one round-trip time off each new connection to a server that supports it.",
+		ID: "net.tcp-fastopen", Name: "Reconnect to websites one round trip sooner",
+		Summary:  "Send the first data together with the connection request on repeat visits.",
+		Details:  "Sets TCP Fast Open. With client support the first data goes out in the connection-opening packet once a cookie from the server is cached, which saves one round trip on each new connection to a server that supports it.",
+		Helps:    "Browsing and APIs on high-latency connections.",
 		Tradeoff: "Only helps connections to servers that support it, and some middleboxes drop such packets (the kernel falls back automatically). Gains are one round trip per connection, not bandwidth.",
 		Evidence: "Time many short connections (page loads, API calls) before and after; on a fast LAN the difference is below measurement noise.",
 		Category: CatNetwork, Tier: TierAdvanced, Risk: RiskLow, Scope: ScopeUntilBoot,
@@ -83,9 +85,10 @@ var slowStartOptions = []Option{
 // TCPSlowStartAfterIdle keeps connection speed across pauses.
 func TCPSlowStartAfterIdle() Tweak {
 	return one(Meta{
-		ID: "net.tcp-idle", Name: "TCP speed after idle",
+		ID: "net.tcp-idle", Name: "Keep connections fast after a pause",
 		Summary:  "Stop long-lived connections from slowing down after a short pause.",
-		Details:  "Writes net.ipv4.tcp_slow_start_after_idle. By default a TCP connection idle for a moment restarts at a small window, so the next burst (a chat message, the next video chunk, a remote-desktop frame) starts slowly. Disabling this keeps the learned window.",
+		Details:  "Turns off slow-start-after-idle. By default a TCP connection that was idle for a moment restarts with a small window, so the next burst (a chat message, a video chunk, a remote-desktop frame) starts slowly.",
+		Helps:    "SSH, remote desktop, streaming and any long-lived connection that sends in bursts.",
 		Tradeoff: "On a congested path the first burst after a pause can overshoot and cause brief loss. Only long-lived, bursty TCP connections are affected.",
 		Evidence: "Compare the time to deliver a burst after a pause (for example an interactive SSH or remote desktop session) over several runs.",
 		Category: CatNetwork, Tier: TierAdvanced, Risk: RiskLow, Scope: ScopeUntilBoot,
@@ -101,9 +104,10 @@ var budgetOptions = []Option{
 // NetdevBudget raises the packets handled per softirq poll.
 func NetdevBudget() Tweak {
 	return one(Meta{
-		ID: "net.budget", Name: "Network receive budget",
-		Summary:  "Let the kernel process more incoming packets per interrupt on very busy links.",
-		Details:  "Writes net.core.netdev_budget. When a fast NIC receives packets faster than the default budget can drain, the kernel counts 'time squeezes' and defers work, which adds jitter. A larger budget lets one poll cycle drain more.",
+		ID: "net.budget", Name: "Handle very busy network links without hiccups",
+		Summary:  "Let the kernel process more incoming packets per interrupt.",
+		Details:  "Sets net.core.netdev_budget. When a fast network card receives packets faster than the default budget can drain, the kernel counts 'time squeezes' and defers work, which adds jitter. A larger budget lets one cycle drain more.",
+		Helps:    "2.5/10 Gb/s links and busy servers; irrelevant on ordinary home connections.",
 		Tradeoff: "A longer poll cycle can delay other work on the same CPU by a little. Irrelevant on ordinary home links.",
 		Evidence: "Only worth trying if /proc/net/softnet_stat shows a growing third column (time squeezes) under load.",
 		Category: CatNetwork, Tier: TierAdvanced, Risk: RiskLow, Scope: ScopeUntilBoot,
@@ -119,9 +123,10 @@ var vfsOptions = []Option{
 // VFSCachePressure biases reclaim between file-name caches and program memory.
 func VFSCachePressure() Tweak {
 	return one(Meta{
-		ID: "mem.vfs-cache", Name: "File-name cache retention",
-		Summary:  "Keep directory and file lookup caches in memory longer.",
-		Details:  "Writes vm.vfs_cache_pressure. Lower values keep the dentry and inode caches longer, which speeds up repeated directory scans, large game or source trees and file managers when you have enough RAM.",
+		ID: "mem.vfs-cache", Name: "Remember file locations longer",
+		Summary:  "Keep directory and file-name caches in memory longer, so repeated lookups are fast.",
+		Details:  "Sets vm.vfs_cache_pressure. Lower values keep the dentry and inode caches longer, which speeds up repeated directory scans, large game or source trees and file managers when you have enough RAM.",
+		Helps:    "People with plenty of RAM who work in large file trees or big game libraries.",
 		Tradeoff: "Those caches then hold memory that programs could use. On a machine that is already short of RAM, lower values make things worse.",
 		Evidence: "Time a repeated directory scan (for example `find` over your game library) before and after; check memory pressure in Doctor.",
 		Category: CatMemory, Tier: TierAdvanced, Risk: RiskLow, Scope: ScopeUntilBoot,
@@ -142,9 +147,10 @@ func DirtyWriteback() Tweak {
 		{"throughput", "Throughput", "Buffer more (20% / 40%): fewer, larger writes; stalls can be longer when the buffer finally flushes."},
 	}
 	m := Meta{
-		ID: "mem.dirty", Name: "Write-back buffering",
-		Summary:  "Control how much unwritten data may collect in RAM before the kernel flushes it to disk.",
-		Details:  "Writes vm.dirty_background_ratio and vm.dirty_ratio together. With lots of RAM and a slow disk, the defaults let gigabytes pile up and then freeze programs while they flush. Lower values spread the writing out.",
+		ID: "mem.dirty", Name: "Avoid long freezes after big file copies",
+		Summary:  "Control how much unsaved data may pile up in RAM before the kernel writes it to disk.",
+		Details:  "Sets vm.dirty_background_ratio and vm.dirty_ratio together. With lots of RAM and a slow disk, the defaults let gigabytes pile up and then freeze programs while they flush. Lower values spread the writing out.",
+		Helps:    "Machines with lots of RAM that copy big files to slow or USB drives.",
 		Tradeoff: "More frequent writes use the disk more steadily and can lower peak copy speed; higher values risk more data loss on a power cut.",
 		Evidence: "Copy a large file to a slow drive and watch whether the desktop stalls at the end; Doctor shows disk stall pressure.",
 		Category: CatStorage, Tier: TierAdvanced, Risk: RiskLow, Scope: ScopeUntilBoot,
@@ -175,9 +181,10 @@ var pageClusterOptions = []Option{
 // PageCluster sets swap read-ahead.
 func PageCluster() Tweak {
 	t := one(Meta{
-		ID: "mem.page-cluster", Name: "Swap read-ahead",
-		Summary:  "Reduce the delay when memory is swapped back in from fast swap such as zram.",
-		Details:  "Writes vm.page-cluster, the number of pages (as a power of two) read per swap-in. The default of 8 pages suits spinning disks; for zram or an SSD swap, reading a single page avoids wasted decompression and shortens stalls.",
+		ID: "mem.page-cluster", Name: "Faster recovery from swap (zram or SSD)",
+		Summary:  "Read back only the page you need when memory is swapped in.",
+		Details:  "Sets vm.page-cluster, the number of pages read per swap-in. The default of 8 pages suits spinning disks; for zram or SSD swap, reading a single page avoids wasted decompression and shortens stalls.",
+		Helps:    "Machines whose swap lives in zram or on an SSD and actually swap.",
 		Tradeoff: "On a hard-disk swap, reading a single page is slower. Irrelevant if you never swap.",
 		Evidence: "Watch memory pressure (Doctor) while the machine is swapping; the gain only exists when it is.",
 		Category: CatMemory, Tier: TierAdvanced, Risk: RiskLow, Scope: ScopeUntilBoot,
@@ -207,9 +214,10 @@ var compactionOptions = []Option{
 // CompactionProactiveness controls background memory defragmentation.
 func CompactionProactiveness() Tweak {
 	return one(Meta{
-		ID: "mem.compaction", Name: "Background memory compaction",
+		ID: "mem.compaction", Name: "Stop background memory tidying",
 		Summary:  "Stop the kernel from defragmenting memory in the background while you are working.",
-		Details:  "Writes vm.compaction_proactiveness. Proactive compaction moves pages around to keep large free blocks available; on some desktops and games that background work shows up as occasional frame-time spikes. Setting it to 0 leaves compaction to when it is actually needed.",
+		Details:  "Sets vm.compaction_proactiveness to 0. Proactive compaction moves pages around to keep large free blocks available; on some desktops and games that background work shows up as occasional frame-time spikes.",
+		Helps:    "Gamers who see rare, random stutter.",
 		Tradeoff: "Large contiguous allocations (huge pages, some drivers) can occasionally take longer to satisfy.",
 		Evidence: "Compare the 1% low and 0.1% low frame times in Benchmark Lab over several runs; the effect is small and only for spike-prone setups.",
 		Category: CatMemory, Tier: TierAdvanced, Risk: RiskLow, Scope: ScopeUntilBoot,
@@ -226,9 +234,10 @@ var maxMapOptions = []Option{
 // MaxMapCount raises the per-process memory mapping limit.
 func MaxMapCount() Tweak {
 	return one(Meta{
-		ID: "game.max-map-count", Name: "Memory mappings per process",
-		Summary:  "Raise the limit on memory regions a single program may map (some games crash or stutter at the old limit).",
-		Details:  "Writes vm.max_map_count. Large games, engines running under Wine/Proton and some memory-hungry tools create hundreds of thousands of mappings; at the old limit of 65530 they fail to allocate and crash or hitch. Most current distributions already raise it.",
+		ID: "game.max-map-count", Name: "Fix game crashes from running out of memory maps",
+		Summary:  "Raise the limit on memory regions a single program may map.",
+		Details:  "Sets vm.max_map_count. Large games, engines under Wine/Proton and some memory-hungry tools create hundreds of thousands of mappings; at the old limit of 65530 they fail to allocate and crash or hitch. Most current distributions already raise it.",
+		Helps:    "Steam/Proton players of large games; anyone seeing out-of-memory crashes with free RAM.",
 		Tradeoff: "Essentially none: it is only a ceiling. Each mapping costs a little kernel memory when it is used.",
 		Evidence: "Needed only if a game crashes with out-of-memory errors while RAM is free; there is no frame-rate gain when the limit was not being hit.",
 		Category: CatGaming, Tier: TierSituational, Risk: RiskLow, Scope: ScopeUntilBoot,
@@ -243,9 +252,10 @@ var splitLockOptions = []Option{
 // SplitLockMitigate stops the kernel from penalising split-lock instructions.
 func SplitLockMitigate() Tweak {
 	return one(Meta{
-		ID: "game.split-lock", Name: "Split-lock penalty",
-		Summary:  "Stop the kernel from slowing programs that use split-lock memory operations (affects some Windows games under Wine/Proton).",
-		Details:  "Writes kernel.split_lock_mitigate (Linux 6.2+). A few games and anti-cheat or DRM layers use misaligned atomic instructions; the kernel penalises them with a ~10 ms stall per occurrence, which shows up as severe stutter. Turning the penalty off removes it.",
+		ID: "game.split-lock", Name: "Remove a stutter in some Windows games",
+		Summary:  "Stop the kernel from slowing programs that use split-lock memory operations.",
+		Details:  "Sets kernel.split_lock_mitigate to 0. A few games and anti-cheat layers use misaligned atomic instructions; the kernel penalises each with a ~10 ms stall, which shows up as severe stutter.",
+		Helps:    "Wine/Proton games with unexplained micro-freezes (look for 'split lock' messages in dmesg).",
 		Tradeoff: "A program using split locks can then stall other CPU cores' memory access (a local denial-of-service nuisance on shared servers, not a privilege issue). Fine on a personal desktop.",
 		Evidence: "Look for 'x86/split lock detection' messages in `dmesg`; if there are none, this changes nothing.",
 		Category: CatGaming, Tier: TierSituational, Risk: RiskLow, Scope: ScopeUntilBoot,
@@ -260,9 +270,10 @@ var autogroupOptions = []Option{
 // SchedAutogroup toggles per-session scheduler grouping.
 func SchedAutogroup() Tweak {
 	return one(Meta{
-		ID: "cpu.autogroup", Name: "Per-session CPU scheduling groups",
-		Summary:  "Keep the desktop responsive while something heavy compiles or renders.",
-		Details:  "Writes kernel.sched_autogroup_enabled. With autogroup on, each terminal/session gets a fair share of CPU, so `make -j64` in one window cannot make the rest of the desktop sluggish. It is already on by default on most kernels; this tweak mainly lets you check or restore it.",
+		ID: "cpu.autogroup", Name: "Keep the desktop smooth during heavy builds",
+		Summary:  "Give each terminal and session its own fair share of CPU, so one huge job cannot make the rest sluggish.",
+		Details:  "Sets kernel.sched_autogroup_enabled. With it on, `make -j64` in one window cannot starve the rest of the desktop. It is already on by default on most kernels; this tweak mainly lets you check or restore it.",
+		Helps:    "Developers who compile or render in the background while using the desktop.",
 		Tradeoff: "Turning it off can raise throughput for one big multi-process job running alongside others at the cost of interactivity.",
 		Evidence: "Run a long parallel build and watch UI responsiveness and frame times of a game running alongside it.",
 		Category: CatCPU, Tier: TierAdvanced, Risk: RiskLow, Scope: ScopeUntilBoot,
@@ -278,9 +289,10 @@ var thpOptions = []Option{
 // TransparentHugepages selects the transparent huge page policy.
 func TransparentHugepages() Tweak {
 	t := one(Meta{
-		ID: "mem.thp", Name: "Transparent huge pages",
-		Summary:  "Choose when the kernel backs memory with large pages.",
-		Details:  "Writes /sys/kernel/mm/transparent_hugepage/enabled. Huge pages reduce address-translation overhead for memory-hungry programs (databases, JVMs, emulators, some games) but the kernel sometimes has to defragment memory to create them, which can cause latency spikes.",
+		ID: "mem.thp", Name: "Choose how memory is handed out in big chunks (THP)",
+		Summary:  "Decide when the kernel backs memory with large pages.",
+		Details:  "Sets the transparent huge page policy. Huge pages reduce address-translation overhead for memory-hungry programs (databases, JVMs, emulators, some games) but the kernel sometimes has to defragment memory to create them, which can cause latency spikes.",
+		Helps:    "Memory-hungry programs: 'always' for throughput, 'never' or 'madvise' for steady latency.",
 		Tradeoff: "'always' can help throughput and hurt latency; 'never' is the reverse. Neither is universally better, which is why nothing here is recommended automatically.",
 		Evidence: "Compare frame-time spikes (Benchmark Lab) or your real workload's runtime, several runs each, with `grep thp /proc/vmstat` for activity.",
 		Category: CatMemory, Tier: TierAdvanced, Risk: RiskLow, Scope: ScopeUntilBoot,
@@ -301,9 +313,10 @@ func ReadAhead() Tweak {
 	t := IOScheduler().(fileTweak)
 	t.what = "disk read-ahead"
 	t.meta = Meta{
-		ID: "io.readahead", Name: "Disk read-ahead",
-		Summary:  "Prefetch more data when you read large files sequentially (game loading, video, backups).",
-		Details:  "Writes /sys/block/<disk>/queue/read_ahead_kb for each whole disk. Larger values let the kernel read bigger chunks ahead of a sequential read, which raises throughput on hard disks and some network-attached storage.",
+		ID: "io.readahead", Name: "Read ahead further on big files",
+		Summary:  "Prefetch more data when you read large files in order (game loading, video, backups).",
+		Details:  "Writes read_ahead_kb for each whole disk. Larger values let the kernel read bigger chunks ahead of a sequential read, which raises throughput on hard disks and some network storage.",
+		Helps:    "Hard disks and network storage with big sequential reads.",
 		Tradeoff: "On SSDs and for random access it mostly wastes page cache and bandwidth. Do not raise it on a machine short of RAM.",
 		Evidence: "Time a large sequential read of a file that is not already cached (for example a freshly rebooted machine loading a big game) before and after.",
 		Category: CatStorage, Tier: TierAdvanced, Risk: RiskLow, Scope: ScopeUntilBoot,
@@ -334,9 +347,10 @@ var usbOptions = []Option{
 // USBAutosuspend sets the idle time before USB devices power down.
 func USBAutosuspend() Tweak {
 	return one(Meta{
-		ID: "usb.autosuspend", Name: "USB power saving",
-		Summary:  "Stop mice, keyboards and headsets from going to sleep between uses, removing the wake-up delay.",
-		Details:  "Writes the usbcore autosuspend delay (seconds; -1 disables). Some USB devices need a moment to wake up after being idle, which can feel like a dropped first click or a stuttering headset. Applies to devices connected afterwards.",
+		ID: "usb.autosuspend", Name: "Stop USB devices from falling asleep",
+		Summary:  "Keep mice, keyboards and headsets awake so the first click or sound after a pause is not delayed.",
+		Details:  "Sets the USB autosuspend delay (-1 turns it off). Some devices need a moment to wake after being idle, which can feel like a dropped first click or a crackling headset. Applies to devices connected afterwards.",
+		Helps:    "Anyone with a USB mouse, keyboard or headset that feels laggy right after a pause.",
 		Tradeoff: "Devices stay powered, so a laptop on battery uses a little more energy.",
 		Evidence: "Only useful if you notice a first-input delay after idling; there is no frame-rate effect.",
 		Category: CatCPU, Tier: TierSituational, Risk: RiskLow, Scope: ScopeUntilBoot,
@@ -353,9 +367,10 @@ var aspmOptions = []Option{
 // PCIeASPM sets the PCI Express link power-management policy.
 func PCIeASPM() Tweak {
 	t := one(Meta{
-		ID: "pcie.aspm", Name: "PCIe link power saving (ASPM)",
-		Summary:  "Keep PCI Express links fully awake to avoid the wake-up latency of power-saving link states.",
-		Details:  "Writes the pcie_aspm policy. Link power states save energy but each wake-up adds microseconds to milliseconds of latency; 'performance' keeps links active. Takes effect only where the firmware lets the OS control ASPM.",
+		ID: "pcie.aspm", Name: "Stop PCIe devices from dozing off (lower latency)",
+		Summary:  "Keep PCI Express links fully awake so NVMe drives, GPUs and network cards answer instantly.",
+		Details:  "Sets the PCIe ASPM policy. Link power-saving states save energy but every wake-up adds microseconds to milliseconds of delay; 'performance' keeps links active. It only works where the firmware lets the system control ASPM.",
+		Helps:    "Desktops and plugged-in laptops that see latency spikes after idle in storage or GPU workloads.",
 		Tradeoff: "Higher idle power and heat, especially on laptops with an NVMe drive. The firmware can refuse changes (the kernel then reports the old value and TurboShift shows that).",
 		Evidence: "Look for latency spikes after idle in storage or GPU workloads; compare with `lspci -vv` link states.",
 		Category: CatCPU, Tier: TierAdvanced, Risk: RiskLow, Scope: ScopeUntilBoot,
@@ -373,9 +388,10 @@ var amdDPMOptions = []Option{
 // AMDGPUPerformanceLevel pins AMD GPU clocks.
 func AMDGPUPerformanceLevel() Tweak {
 	m := Meta{
-		ID: "gpu.amd-level", Name: "AMD GPU clock level",
-		Summary:  "Hold an AMD graphics card at high clocks to avoid ramp-up lag in games.",
+		ID: "gpu.amd-level", Name: "Keep the AMD graphics card at full speed",
+		Summary:  "Hold an AMD graphics card at high clocks so games never wait for it to speed up.",
 		Details:  "Writes power_dpm_force_performance_level for each amdgpu card. 'auto' lets the driver scale clocks with load, which can lag at the start of heavy frames; 'high' pins the top state.",
+		Helps:    "AMD GPU gamers on a desktop or plugged-in laptop who see ramp-up stutter.",
 		Tradeoff: "Much higher idle power, heat and fan noise while it is set; it does not raise the card's maximum, only removes the wait to reach it. Revert it when you stop gaming.",
 		Evidence: "Compare 1% low frame times in Benchmark Lab; a GPU already at full load in your game will not change.",
 		Category: CatGaming, Tier: TierSituational, Risk: RiskMedium, Scope: ScopeUntilBoot,

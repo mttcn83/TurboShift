@@ -40,9 +40,15 @@ run "doctor"                         0 turbo doctor
 run "doctor --json"                  0 turbo doctor --json;       has "valid-looking JSON" '"findings"'
 run "doctor has no ANSI when piped"  0 turbo doctor;              ! grep -q "$(printf '\033')" /tmp/out && pass "no escape codes in piped output" || bad "escape codes in piped output"
 run "status"                         0 turbo status
-run "tweaks list"                    0 turbo tweaks list;         has "lists power.profile" 'power.profile'
+run "tweaks list"                    0 turbo tweaks list;         has "lists a category" 'Network'
+run "tweaks list --all"              0 turbo tweaks list --all;   has "lists power.profile" 'power.profile'
+run "undo with nothing to undo"      0 turbo undo;                has "friendly empty state" 'Nothing to undo'
 run "tweaks list --json"             0 turbo tweaks list --json;  has "json rows" '"ID"'
 run "tweaks show"                    0 turbo tweaks show power.profile
+run "preset list"                    0 turbo preset list;         has "lists gaming" 'gaming'
+run "preset show"                    0 turbo preset show gaming;  has "counts what applies" 'apply on this PC'
+run "preset dry-run changes nothing" 0 turbo preset apply gaming --dry-run
+run "unknown preset is a usage error" 2 turbo preset show nope
 run "snapshots list (empty)"         0 turbo snapshots list;      has "friendly empty state" 'No restore points'
 run "snapshots recover (nothing)"    0 turbo snapshots recover
 run "benchmark list (empty)"         0 turbo benchmark list;      has "friendly empty state" 'No runs yet'
@@ -74,7 +80,7 @@ if [ -x "$PTY" ]; then
   "$PTY" "$(command -v turbo)" big "key:s" "wait:3500" "dump:scan" "key:3" "dump:optimizer" "key:8" "dump:settings" "key:q" "wait:500" >/tmp/out 2>/tmp/err
   has "TUI draws the app"            'TURBOSHIFT'
   has "TUI shows a health panel"     'Health'
-  has "TUI optimizer lists tweaks"   'Power profile'
+  has "TUI optimizer lists tweaks"   'Catalog \(54\)'
   if grep -q 'STILL RUNNING' /tmp/out; then bad "TUI did not quit on q"; else pass "TUI quits on q"; fi
   "$PTY" "$(command -v turbo)" small "key:o" "wait:3500" "dump:opt" "key:<esc>" "key:q" "wait:500" >/tmp/out 2>/tmp/err
   has "80x24 layout keeps the buttons" 'Optimize My PC'

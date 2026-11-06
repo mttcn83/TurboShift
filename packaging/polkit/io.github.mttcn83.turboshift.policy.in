@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD polkit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<!--
+  Installed by `make install` with @BINARY@ replaced by the installed path.
+  It only covers `turbo __priv`, the allowlisted helper (see SECURITY.md).
+  auth_admin_keep lets polkit remember one successful password prompt for the
+  calling process for its usual retention time (about five minutes), so
+  applying a preset of a dozen settings asks once instead of a dozen times.
+  Delete this file to go back to polkit's stricter default (ask every time).
+-->
+<policyconfig>
+  <vendor>TurboShift</vendor>
+  <vendor_url>https://github.com/mttcn83/TurboShift</vendor_url>
+  <action id="io.github.mttcn83.turboshift.apply">
+    <description>Change performance settings with TurboShift</description>
+    <message>Authentication is required to change system performance settings</message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">@BINARY@</annotate>
+    <annotate key="org.freedesktop.policykit.exec.argv1">__priv</annotate>
+  </action>
+</policyconfig>

@@ -21,7 +21,8 @@ func cmdTweaks(ctx context.Context, a *app.App, args []string, o *out) int {
 	switch args[0] {
 	case "list":
 		fs := newFlags("tweaks list", o)
-		asJSON := fs.Bool("json", false, "machine-readable output")
+		asJSON := fs.Bool("json", false, "machine-readable output (always includes everything)")
+		all := fs.Bool("all", false, "also list tweaks that are not available on this PC, with the reason")
 		if _, err := parse(fs, args[1:]); err != nil {
 			return ExitUsage
 		}
@@ -41,17 +42,29 @@ func cmdTweaks(ctx context.Context, a *app.App, args []string, o *out) int {
 			return o.json(rows)
 		}
 		o.heading("tweaks")
+		cat, hidden := "", 0
 		for _, r := range rows {
+			if !r.Available && !*all {
+				hidden++
+				continue
+			}
+			if r.Category != cat {
+				cat = r.Category
+				o.printf("\n  %s\n", o.bold(cat))
+			}
 			state := o.green("available  ")
 			if !r.Available {
 				state = o.dim("unavailable")
 			}
-			o.printf("  %s  %-20s %-13s risk %-6s %s\n", state, o.bold(r.ID), r.Tier, r.Risk, r.Name)
+			o.printf("  %s  %-27s %-12s risk %-6s %s\n", state, o.bold(r.ID), r.Tier, r.Risk, r.Name)
 			if !r.Available {
 				o.printf("               %s\n", o.dim(wrap(r.Reason, 70, "               ")))
 			} else if r.Recommended != nil {
 				o.printf("               %s\n", o.yellow("suggested: "+wrap(r.Recommended.Why, 62, "               ")))
 			}
+		}
+		if hidden > 0 {
+			o.printf("\n  %s\n", o.dim(fmt.Sprintf("%d more are not available on this PC (hardware missing, a power manager owns the setting, or turbo is not installed system-wide). `turbo tweaks list --all` shows why.", hidden)))
 		}
 		o.println()
 		return ExitOK
@@ -70,6 +83,7 @@ func cmdTweaks(ctx context.Context, a *app.App, args []string, o *out) int {
 		f("Name", m.Name)
 		f("What", m.Summary)
 		f("Details", m.Details)
+		f("Helps", m.Helps)
 		f("Trade-off", m.Tradeoff)
 		f("Measure", m.Evidence)
 		f("Tier/Risk", fmt.Sprintf("%s · risk %s · %s · %s", m.Tier, m.Risk, m.Scope, map[bool]string{true: "needs administrator permission", false: "no root needed"}[m.NeedsAuth]))
@@ -292,4 +306,43 @@ func cmdSnapshots(ctx context.Context, a *app.App, args []string, o *out) int {
 		return code
 	}
 	return usageErr(o, "unknown snapshots subcommand %q", args[0])
+}
+
+// cmdUndo restores the newest restore point that still has changes to undo.
+func cmdUndo(ctx context.Context, a *app.App, args []string, o *out) int {
+	fs := newFlags("undo", o)
+	yes := fs.Bool("yes", false, "skip the confirmation prompt")
+	if _, err := parse(fs, args); err != nil {
+		return ExitUsage
+	}
+	snaps, _, err := a.Store.List()
+	if err != nil {
+		return fail(o, err)
+	}
+	var s *snapshot.Snapshot
+	for _, c := range snaps {
+		if c.Status == snapshot.StatusCommitted || c.Status == snapshot.StatusRestorePartial {
+			s = c
+			break
+		}
+	}
+	if s == nil {
+		o.println("  Nothing to undo: TurboShift has not changed anything yet (or everything was already undone).")
+		return ExitOK
+	}
+	o.heading("undo")
+	o.printf("  Last change: %s (%s)\n", o.bold(s.Label), s.CreatedAt.Local().Format("2006-01-02 15:04"))
+	for _, it := range s.Items {
+		o.printf("    %s  %s\n", o.accent(it.TweakID), o.dim(it.Name))
+	}
+	if !*yes {
+		o.printf("\n  Put these back as they were? [y/N] ")
+		var ans string
+		_, _ = fmt.Fscanln(stdinReader(), &ans)
+		if !strings.EqualFold(strings.TrimSpace(ans), "y") && !strings.EqualFold(strings.TrimSpace(ans), "yes") {
+			o.println("  Cancelled. Nothing was changed.")
+			return ExitOK
+		}
+	}
+	return cmdSnapshots(ctx, a, []string{"restore", s.ID}, o)
 }

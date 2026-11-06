@@ -9,13 +9,85 @@ import (
 
 	"github.com/mttcn83/turboshift/internal/detect"
 	"github.com/mttcn83/turboshift/internal/diagnostics"
+	"github.com/mttcn83/turboshift/internal/snapshot"
+	"github.com/mttcn83/turboshift/internal/tweaks"
 )
+
+// latestUndoable is the newest restore point that still has changes to undo.
+func (m *Model) latestUndoable() (*snapshot.Snapshot, []*snapshot.Snapshot) {
+	snaps, _, _ := m.app.Store.List()
+	for _, s := range snaps {
+		if s.Status == snapshot.StatusCommitted || s.Status == snapshot.StatusRestorePartial {
+			return s, snaps
+		}
+	}
+	return nil, snaps
+}
+
+// undoLatest asks to undo the most recent change set (a confirmation follows).
+func (m *Model) undoLatest() tea.Cmd {
+	s, snaps := m.latestUndoable()
+	if s == nil {
+		m.notify(true, "Nothing to undo: TurboShift has not changed anything yet.")
+		return nil
+	}
+	m.vt.snaps = snaps
+	for i, v := range snaps {
+		if v == s {
+			m.vt.cursor = i
+		}
+	}
+	return m.vaultAct("restore")
+}
+
+// nextStep says in one sentence what to do now.
+func (m *Model) nextStep() string {
+	switch {
+	case len(m.interrupted) > 0:
+		return m.th.Err("!") + " An unfinished change was found. Open the Vault (7) to recover it."
+	case !m.scanned:
+		return m.th.Bold("Start here:") + " press " + m.key("Enter") + " to scan (changes nothing), or pick a goal."
+	case len(m.recommended()) > 0:
+		return m.th.Accent(fmt.Sprintf("%d change(s) recommended for this PC.", len(m.recommended()))) + " Press " + m.key("o") + " to review them."
+	case m.lockedNote != "":
+		return m.th.Warn(m.gl.Warn+" ") + m.lockedNote
+	}
+	return m.th.OK(m.gl.Check) + " Nothing is wrong. Want more speed anyway? Pick a goal: you see every change first."
+}
+
+// quickBox lists the one-key goals.
+func (m *Model) quickBox(inner int) []string {
+	var l []string
+	for _, p := range tweaks.Presets() {
+		status := ""
+		if m.scanned {
+			status = fmt.Sprintf("%d fit", m.presetFit(p))
+		}
+		left := m.key(p.Key) + "  " + m.th.Bold(fit(p.Headline, 25))
+		room := max(8, inner-4-25-2-8)
+		l = append(l, left+"  "+m.th.Dim(fit(p.Blurb, room))+" "+m.th.Dim(fit(status, 6)))
+	}
+	undo := m.th.Dim("nothing to undo yet")
+	if s, _ := m.latestUndoable(); s != nil {
+		undo = m.th.Dim("put back what the last change altered (" + s.CreatedAt.Local().Format("15:04") + ")")
+	}
+	l = append(l, m.key("u")+"  "+m.th.Bold(fit("Undo the last change", 25))+"  "+undo)
+	return l
+}
 
 // bodyY is the first screen row of the content area (below the tab bar).
 const bodyY = 2
 
 func (m *Model) keyDashboard(msg tea.KeyPressMsg) (tea.Cmd, bool) {
-	switch msg.String() {
+	k := msg.String()
+	for _, p := range tweaks.Presets() {
+		if k == p.Key {
+			return m.startPreset(p.ID), true
+		}
+	}
+	switch k {
+	case "u":
+		return m.undoLatest(), true
 	case "o":
 		return m.optimizeRecommended(), true
 	case "enter":
@@ -34,7 +106,7 @@ func (m *Model) kv(label, value string, lw int) string {
 
 func (m *Model) viewDashboard(w, h int) []string {
 	var out []string
-	if w >= bannerWidth+2 && h >= 30 && m.gl.Full != "#" {
+	if w >= bannerWidth+2 && h >= 42 && m.gl.Full != "#" {
 		for _, l := range banner {
 			out = append(out, " "+m.th.Accent(l))
 		}
@@ -49,15 +121,11 @@ func (m *Model) viewDashboard(w, h int) []string {
 	if m.busy != nil {
 		out = append(out, " "+m.th.Dim(b1+"  "+b2+"   working…"))
 	} else {
-		line := " " + m.th.Sel(b1) + "  " + m.th.Bold(b2)
-		if !m.scanned {
-			line += m.th.Dim("   first time? press Enter")
-		}
-		out = append(out, line)
+		out = append(out, " "+m.th.Sel(b1)+"  "+m.th.Bold(b2))
 		m.addHit(1, y, vw(b1), 1, "scan")
 		m.addHit(1+vw(b1)+2, y, vw(b2), 1, "optimize")
 	}
-	out = append(out, "")
+	out = append(out, " "+m.nextStep(), "")
 
 	// Health is the most important panel, then live gauges, then the hardware card.
 	health := m.healthBox(w - 4)
@@ -75,6 +143,19 @@ func (m *Model) viewDashboard(w, h int) []string {
 			return max(lh, mh)
 		}
 		return lh + mh
+	}
+	// The goals come right after the buttons; on a tiny terminal they shrink
+	// to one line of hints so health and the buttons always stay visible.
+	quick := m.quickBox(w - 4)
+	if h-len(out)-(len(health)+2) >= len(quick)+2+6 {
+		y := bodyY + len(out) + 1
+		out = append(out, m.box("What do you want to do?", quick, w, 0, false)...)
+		for i, p := range tweaks.Presets() {
+			m.addHit(0, y+i, w, 1, "preset:"+p.ID)
+		}
+		m.addHit(0, y+len(tweaks.Presets()), w, 1, "undo")
+	} else {
+		out = append(out, " "+m.th.Dim("Goals: ")+m.key("g")+" gaming  "+m.key("d")+" desktop  "+m.key("n")+" network  "+m.key("m")+" maximum  "+m.key("u")+" undo")
 	}
 	budget := h - len(out) - (len(health) + 2)
 	if height(live, mach) > budget {

@@ -16,7 +16,8 @@ type optState struct {
 	cursor  int
 	top     int
 	search  textInput
-	dscroll int // scroll offset of the details pane
+	cat     tweaks.Category // "" = all categories
+	dscroll int             // scroll offset of the details pane
 }
 
 func tierTag(t tweaks.Tier) string {
@@ -55,6 +56,139 @@ func summaryOf(t tweaks.Tweak, s tweaks.State) string {
 	return stateSummary(s)
 }
 
+// humanState is summaryOf with a raw value swapped for its option label
+// ("-1" becomes "Never suspend") when the tweak is in a single known state.
+func humanState(t tweaks.Tweak, as tweaks.Assessment) string {
+	s := summaryOf(t, as.Current)
+	for _, o := range optionsOf(t.Meta(), as) {
+		if o.Value == s {
+			return o.Label
+		}
+	}
+	return s
+}
+
+// alreadyAt reports whether every part of the tweak already has the value.
+func alreadyAt(as tweaks.Assessment, v string) bool {
+	if len(as.Current) == 0 {
+		return false
+	}
+	for _, c := range as.Current {
+		if c != v {
+			return false
+		}
+	}
+	return true
+}
+
+// tickPreset replaces the current selection with the preset's items that
+// apply to this machine and are not already set. It changes nothing on the
+// system: the user still reviews the exact preview before anything is applied.
+func (m *Model) tickPreset(p tweaks.Preset) (ticked int) {
+	if !m.scanned {
+		m.notify(false, "Scan first (press r) so TurboShift knows which settings fit this PC.")
+		return 0
+	}
+	m.opt.checked = map[string]bool{}
+	m.opt.search.val = ""
+	skipped := 0
+	first := ""
+	for _, it := range p.Items {
+		t, ok := m.app.Reg.Get(it.TweakID)
+		as := m.assess[it.TweakID]
+		if !ok || !as.Available {
+			skipped++
+			continue
+		}
+		mt := t.Meta()
+		opts := optionsOf(mt, as)
+		idx := optionIndex(opts, it.Value)
+		if len(opts) == 0 || opts[idx].Value != it.Value || alreadyAt(as, it.Value) {
+			skipped++
+			continue
+		}
+		m.opt.checked[it.TweakID] = true
+		m.opt.choice[it.TweakID] = idx
+		if first == "" {
+			first = it.TweakID
+		}
+		ticked++
+	}
+	for i, v := range m.visibleTweaks() {
+		if v.Meta().ID == first {
+			m.opt.cursor = i
+			break
+		}
+	}
+	if ticked == 0 {
+		m.notify(false, fmt.Sprintf("%s: nothing to change, all %d settings are already set or unavailable on this PC.", p.Name, len(p.Items)))
+		return 0
+	}
+	m.notify(true, fmt.Sprintf("%s: %d setting(s) selected, %d not applicable here.", p.Name, ticked, skipped))
+	return ticked
+}
+
+// presetFit counts the preset's settings that would change something here.
+func (m *Model) presetFit(p tweaks.Preset) int {
+	n := 0
+	for _, it := range p.Items {
+		as := m.assess[it.TweakID]
+		if !as.Available || alreadyAt(as, it.Value) {
+			continue
+		}
+		if opts := optionsOf(m.metaOf(it.TweakID), as); len(opts) > 0 && opts[optionIndex(opts, it.Value)].Value == it.Value {
+			n++
+		}
+	}
+	return n
+}
+
+func (m *Model) metaOf(id string) tweaks.Meta {
+	if t, ok := m.app.Reg.Get(id); ok {
+		return t.Meta()
+	}
+	return tweaks.Meta{}
+}
+
+// startPreset is the one-step path from a keypress or click to the preview:
+// scan first if needed, select what fits, then show the exact changes.
+func (m *Model) startPreset(id string) tea.Cmd {
+	p, ok := tweaks.PresetByID(id)
+	if !ok {
+		return nil
+	}
+	if !m.scanned {
+		m.pendingPreset = id
+		return m.startScan(false)
+	}
+	if m.tickPreset(p) == 0 {
+		return nil
+	}
+	return m.previewCmd(m.selected())
+}
+
+// openPresets lists the ready-made bundles.
+func (m *Model) openPresets() {
+	md := &modal{kind: modalConfirm, title: "Presets: one-step bundles"}
+	md.add("dim", "Pick a goal. You will see the exact changes first; nothing happens until you confirm.")
+	md.gap()
+	for _, p := range tweaks.Presets() {
+		n := m.presetFit(p)
+		fit := fmt.Sprintf("%d of %d settings apply here", n, len(p.Items))
+		if !m.scanned {
+			fit = "scan first to see what applies"
+		}
+		md.add("head", p.Headline+"  ("+p.Key+")  "+fit)
+		md.add("", p.Summary, 2)
+		md.add("dim", "Best for: "+p.Best, 2)
+		md.add("dim", "Cost: "+p.Cost, 2)
+		md.gap()
+		md.buttons = append(md.buttons, mbtn{p.Name, "preset:" + p.ID, p.Key})
+	}
+	md.buttons = append(md.buttons, mbtn{"Cancel (Esc)", "close", ""})
+	m.modal = md
+}
+
 // visibleTweaks is the catalog filtered by the search box.
 func (m *Model) visibleTweaks() []tweaks.Tweak {
 	q := strings.ToLower(strings.TrimSpace(m.opt.search.val))
@@ -62,6 +196,9 @@ func (m *Model) visibleTweaks() []tweaks.Tweak {
 	for _, t := range m.app.Reg.All() {
 		mt := t.Meta()
 		hay := strings.ToLower(mt.ID + " " + mt.Name + " " + mt.Summary + " " + string(mt.Category) + " " + string(mt.Tier) + " " + mt.Risk.String())
+		if m.opt.cat != "" && mt.Category != m.opt.cat {
+			continue
+		}
 		if q == "" || strings.Contains(hay, q) {
 			out = append(out, t)
 		}
@@ -110,7 +247,14 @@ func (m *Model) keyOptimizer(msg tea.KeyPressMsg) (tea.Cmd, bool) {
 	case "/":
 		m.opt.search.active = true
 		return nil, true
+	case "c":
+		m.cycleCategory()
+		return nil, true
 	case "esc":
+		if m.opt.cat != "" && m.opt.search.val == "" {
+			m.opt.cat, m.opt.cursor, m.opt.top = "", 0, 0
+			return nil, true
+		}
 		if m.opt.search.val != "" {
 			m.opt.search.val = ""
 			m.opt.cursor = 0
@@ -128,8 +272,34 @@ func (m *Model) keyOptimizer(msg tea.KeyPressMsg) (tea.Cmd, bool) {
 		return m.optAct("apply"), true
 	case "r":
 		return m.startScan(false), true
+	case "p":
+		m.openPresets()
+		return nil, true
 	}
 	return nil, false
+}
+
+// cycleCategory steps the list through All, then each category in catalogue order.
+func (m *Model) cycleCategory() {
+	var cats []tweaks.Category
+	seen := map[tweaks.Category]bool{}
+	for _, t := range m.app.Reg.All() {
+		if c := t.Meta().Category; !seen[c] {
+			seen[c] = true
+			cats = append(cats, c)
+		}
+	}
+	next := tweaks.Category("")
+	if m.opt.cat == "" {
+		next = cats[0]
+	} else {
+		for i, c := range cats {
+			if c == m.opt.cat && i+1 < len(cats) {
+				next = cats[i+1]
+			}
+		}
+	}
+	m.opt.cat, m.opt.cursor, m.opt.top, m.opt.dscroll = next, 0, 0, 0
 }
 
 func (m *Model) optAct(arg string) tea.Cmd {
@@ -194,6 +364,10 @@ func (m *Model) optAct(arg string) tea.Cmd {
 		return m.previewCmd(reqs)
 	case "scan":
 		return m.startScan(false)
+	case "cat":
+		m.cycleCategory()
+	case "presets":
+		m.openPresets()
 	}
 	return nil
 }
@@ -212,8 +386,10 @@ func (m *Model) viewOptimizer(w, h int) []string {
 		}
 	case m.opt.search.val != "":
 		head += "   " + m.th.Accent("filter:") + " " + m.opt.search.val + m.th.Dim("  (Esc clears)")
+	case m.opt.cat != "":
+		head += "   " + m.th.Accent("category: "+string(m.opt.cat)) + m.th.Dim("  (c next · Esc all)")
 	default:
-		head += m.th.Dim("   REC recommended · SIT situational · ADV advanced · every change is previewed and reversible")
+		head += m.th.Dim("   REC recommended · SIT situational · ADV advanced · every change is previewed")
 	}
 	out = append(out, head, "")
 	if !m.scanned {
@@ -228,7 +404,7 @@ func (m *Model) viewOptimizer(w, h int) []string {
 	listW, detW := w, w
 	listH := max(5, avail*55/100)
 	if sideBySide {
-		listW = w * 55 / 100
+		listW = w * 60 / 100
 		detW = w - listW - 1
 		listH = avail
 	}
@@ -256,16 +432,31 @@ func (m *Model) viewOptimizer(w, h int) []string {
 			opts := optionsOf(mt, as)
 			choice := ""
 			if len(opts) > 0 {
-				choice = opts[clampI(m.opt.choice[mt.ID], 0, len(opts)-1)].Value
+				choice = opts[clampI(m.opt.choice[mt.ID], 0, len(opts)-1)].Label
 			}
-			state = m.th.Dim(summaryOf(vis[i], as.Current)) + " " + m.gl.Arrow + " " + choice
+			if inner >= 76 {
+				state = m.th.Dim(fit(humanState(vis[i], as), 14)) + " " + m.gl.Arrow + " " + fit(choice, 14)
+			} else if m.opt.checked[mt.ID] {
+				state = m.gl.Arrow + " " + fit(choice, 14)
+			} else {
+				state = ""
+			}
+		}
+		if inner < 76 && !as.Available {
+			state = "" // the detail pane explains why; keep the name readable
 		}
 		star := " "
 		if as.Available && as.Recommend != nil {
 			star = m.th.Accent("*")
 		}
 		fixed := 3 + 1 + 3 + 1 + 4 + 1 + 1
-		name := fit(mt.Name, max(10, inner-fixed-28))
+		stateW := 0
+		if inner >= 76 {
+			stateW = 32
+		} else if m.opt.checked[mt.ID] {
+			stateW = 17
+		}
+		name := fit(mt.Name, max(10, inner-fixed-stateW-1))
 		line := box + " " + tierTag(mt.Tier) + " " + m.risk(mt.Risk.String()) + " " + star + name + " " + state
 		if i == m.opt.cursor {
 			line = m.th.Sel(fit(stripANSI(line), inner))
@@ -274,7 +465,11 @@ func (m *Model) viewOptimizer(w, h int) []string {
 		m.addHit(1, bodyY+len(out)+1+len(lb), 4, 1, fmt.Sprintf("opt:tog:%d", i))
 		lb = append(lb, line)
 	}
-	listBox := m.box(fmt.Sprintf("Catalog (%d)", len(vis)), lb, listW, listH, true)
+	title := fmt.Sprintf("Catalog (%d)", len(vis))
+	if len(vis) > 0 && m.opt.cat == "" {
+		title += " · " + string(vis[m.opt.cursor].Meta().Category)
+	}
+	listBox := m.box(title, lb, listW, listH, true)
 
 	// ---- detail ----
 	var db []string
@@ -307,12 +502,16 @@ func (m *Model) viewOptimizer(w, h int) []string {
 	n := len(m.selected())
 	btn := fmt.Sprintf("[ Preview & apply %d selected (a) ]", n)
 	by := bodyY + len(out)
+	pb, cb := "[ Presets (p) ]", "[ Category (c) ]"
 	if n == 0 {
-		out = append(out, " "+m.th.Dim("[ Preview & apply (a) ]")+m.th.Dim("   Space ticks an item · ←/→ changes its option · * = recommended for this machine right now"))
+		btn = "[ Preview & apply (a) ]"
+		out = append(out, " "+m.th.Dim(btn)+" "+m.th.Bold(pb)+" "+m.th.Bold(cb)+m.th.Dim("  Space ticks an item · ←/→ changes its option"))
 	} else {
-		out = append(out, " "+m.th.Sel(btn)+m.th.Dim("   nothing changes until you confirm the preview"))
+		out = append(out, " "+m.th.Sel(btn)+" "+m.th.Bold(pb)+" "+m.th.Bold(cb)+m.th.Dim("  nothing changes until you confirm"))
 	}
 	m.addHit(1, by, vw(btn), 1, "opt:apply")
+	m.addHit(2+vw(btn), by, vw(pb), 1, "opt:presets")
+	m.addHit(3+vw(btn)+vw(pb), by, vw(cb), 1, "opt:cat")
 	return out
 }
 
@@ -327,6 +526,10 @@ func (m *Model) tweakDetail(t tweaks.Tweak, w int) []string {
 	}
 	d = append(d, "")
 	d = append(d, wrapText(mt.Summary, w)...)
+	if mt.Helps != "" {
+		d = append(d, "", m.th.Bold("Who it helps"))
+		d = append(d, wrapText(mt.Helps, w)...)
+	}
 	if !as.Available {
 		reason := as.Reason
 		if !m.scanned {
@@ -337,7 +540,7 @@ func (m *Model) tweakDetail(t tweaks.Tweak, w int) []string {
 		if as.Reason != "" {
 			d = append(d, "", m.th.Warn("Note: ")+as.Reason)
 		}
-		d = append(d, "", m.kv("Now", summaryOf(t, as.Current), 6))
+		d = append(d, "", m.kv("Now", humanState(t, as), 6))
 		opts := optionsOf(mt, as)
 		cur := clampI(m.opt.choice[mt.ID], 0, max(0, len(opts)-1))
 		for i, o := range opts {
@@ -345,11 +548,10 @@ func (m *Model) tweakDetail(t tweaks.Tweak, w int) []string {
 			if i == cur {
 				mark = m.th.Accent(m.gl.Arrow) + " "
 			}
-			line := mark + o.Value
+			d = append(d, mark+m.th.Bold(o.Label))
 			if o.Note != "" {
-				line += m.th.Dim("  " + o.Note)
+				d = append(d, "    "+m.th.Dim(o.Note))
 			}
-			d = append(d, line)
 		}
 		if as.Recommend != nil {
 			d = append(d, "", m.th.Accent("Recommended now: ")+as.Recommend.Why)

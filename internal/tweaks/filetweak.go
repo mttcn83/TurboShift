@@ -254,9 +254,10 @@ func CPUEnergyPreference() Tweak {
 	return fileTweak{
 		what: "CPU energy preference",
 		meta: Meta{
-			ID: "cpu.epp", Name: "CPU energy preference",
-			Summary:  "Tell the CPU's own frequency controller whether to favour speed or power saving.",
-			Details:  "Writes energy_performance_preference for every CPU thread. On Intel (HWP) and AMD (amd-pstate active mode) the processor itself picks clock speeds; this hint biases it. A 'power' preference left on while plugged in makes the CPU slow to ramp up, which can feel like lag.",
+			ID: "cpu.epp", Name: "Make the CPU favour speed over saving power",
+			Summary:  "Tell the CPU's own speed controller to ramp up faster, or to save more power.",
+			Details:  "Writes the energy preference of every CPU thread. On modern Intel and AMD chips the processor chooses its own clock speed; this hint biases that choice. A power-saving preference left on while you are plugged in makes the CPU slow to speed up, which can feel like lag.",
+			Helps:    "Anyone plugged in whose CPU still leans towards saving power; laptops and desktops with intel_pstate or amd-pstate.",
 			Tradeoff: "Favouring performance raises power draw, heat and fan noise, and shortens battery life. It does nothing for GPU- or network-bound work.",
 			Evidence: "Compare frame times (Benchmark Lab, ≥4 runs each). If a game is GPU-bound the result will not move; then revert.",
 			Category: CatCPU, Tier: TierSituational, Risk: RiskLow, Scope: ScopeUntilBoot,
@@ -303,9 +304,10 @@ func CPUBoost() Tweak {
 	return fileTweak{
 		what: "CPU turbo/boost",
 		meta: Meta{
-			ID: "cpu.boost", Name: "CPU turbo / boost",
+			ID: "cpu.boost", Name: "Let the CPU run faster than its base speed (turbo)",
 			Summary:  "Allow or forbid the CPU to run above its base clock.",
-			Details:  "Flips intel_pstate/no_turbo or cpufreq/boost. With boost off the CPU never exceeds its base clock, which can cost a large share of single-thread speed in games and compilers.",
+			Details:  "Flips the kernel's turbo switch. With boost off the CPU never exceeds its base clock, which can cost a large share of single-thread speed in games and compilers; with it on it uses spare thermal headroom to go faster.",
+			Helps:    "People whose turbo got switched off (by a script or a power tool); also anyone who wants to turn it off to cool a hot laptop.",
 			Tradeoff: "Boost raises temperature, fan noise and power draw. Turning it off is a legitimate way to cool a hot laptop; turning it on only helps if something turned it off.",
 			Evidence: "Watch clock speed and temperature on the Dashboard, and compare frame times in Benchmark Lab.",
 			Category: CatCPU, Tier: TierSituational, Risk: RiskLow, Scope: ScopeUntilBoot,
@@ -372,9 +374,10 @@ func PlatformProfile() Tweak {
 	return fileTweak{
 		what: "firmware platform profile",
 		meta: Meta{
-			ID: "platform.profile", Name: "Firmware platform profile",
+			ID: "platform.profile", Name: "Laptop fan and power mode",
 			Summary:  "Switch the laptop firmware between quiet, balanced and performance modes.",
-			Details:  "Writes /sys/firmware/acpi/platform_profile, which many laptops (ASUS, Lenovo, HP, Dell, Framework...) map to fan curves and CPU/GPU power limits. On systems with power-profiles-daemon the daemon owns this setting, so TurboShift only offers it when no power manager is running.",
+			Details:  "Writes the ACPI platform profile that many laptops (ASUS, Lenovo, HP, Dell, Framework...) map to fan curves and CPU/GPU power limits. With power-profiles-daemon running the daemon owns this setting, so TurboShift only offers it when no power manager is active.",
+			Helps:    "Gaming laptops that need a performance profile for sustained load, or a quiet profile for the library.",
 			Tradeoff: "Performance profiles raise fan noise, heat and battery drain. The firmware decides what each name really does.",
 			Evidence: "Compare sustained frame times and CPU temperature over a long session (short runs hide thermal limits).",
 			Category: CatCPU, Tier: TierAdvanced, Risk: RiskLow, Scope: ScopeUntilBoot,
@@ -417,9 +420,10 @@ func TCPCongestion() Tweak {
 	return fileTweak{
 		what: "TCP congestion control",
 		meta: Meta{
-			ID: "net.tcp-cc", Name: "TCP congestion control",
-			Summary:  "Choose how TCP connections react to loss and delay (downloads, web, game launchers).",
-			Details:  "Writes net.ipv4.tcp_congestion_control for new TCP connections. It affects downloads, streaming and web traffic only. Online games send their action traffic over UDP, which this does not touch, so do not expect it to change in-game ping.",
+			ID: "net.tcp-cc", Name: "Better download speed on lossy or long links (BBR)",
+			Summary:  "Choose how downloads and web traffic react to lost packets and delay.",
+			Details:  "Sets the TCP congestion-control algorithm for new connections. BBR models the link instead of reacting only to loss, which often gives higher throughput on lossy or long-distance paths. Online games use UDP, which this does not touch.",
+			Helps:    "Wi-Fi, mobile, VPN and far-away servers; game launchers, large downloads and streaming.",
 			Tradeoff: "Only algorithms already loaded in your kernel are offered (load tcp_bbr first if BBR is missing). A change can make some links faster and others worse.",
 			Evidence: "Network Doctor's download load test: compare throughput and latency under load before and after, over several runs.",
 			Category: CatNetwork, Tier: TierAdvanced, Risk: RiskLow, Scope: ScopeUntilBoot,
@@ -454,9 +458,10 @@ func Swappiness() Tweak {
 	return fileTweak{
 		what: "vm.swappiness",
 		meta: Meta{
-			ID: "mem.swappiness", Name: "Swap eagerness (vm.swappiness)",
-			Summary:  "Set how eagerly the kernel moves idle memory to swap.",
-			Details:  "Writes vm.swappiness (0-200). Lower values keep program memory in RAM longer; high values (100-200) make sense when swap is fast compressed RAM (zram), because swapping is cheaper than dropping file cache. There is no universally best number, so TurboShift never recommends one automatically.",
+			ID: "mem.swappiness", Name: "Keep your programs in RAM longer (swappiness)",
+			Summary:  "Set how eagerly the kernel moves idle memory out to swap.",
+			Details:  "Sets vm.swappiness (0-200). Lower values keep program memory in RAM longer; high values (100-200) make sense when swap is fast compressed RAM (zram), because swapping is cheaper than dropping file cache. There is no best number for everyone, so nothing is recommended automatically.",
+			Helps:    "Desktops that hold many programs open; machines with zram or fast swap.",
 			Tradeoff: "Too low can cause stalls when memory finally runs short; too high on a slow disk makes the system swap needlessly.",
 			Evidence: "Watch memory pressure (Doctor shows the kernel's own stall figures) during your real workload before and after.",
 			Category: CatMemory, Tier: TierAdvanced, Risk: RiskLow, Scope: ScopeUntilBoot,
@@ -498,9 +503,10 @@ func IOScheduler() Tweak {
 	return fileTweak{
 		what: "I/O scheduler",
 		meta: Meta{
-			ID: "io.scheduler", Name: "Disk I/O scheduler",
-			Summary:  "Choose how the kernel orders reads and writes to your disks.",
-			Details:  "Writes /sys/block/<disk>/queue/scheduler for each whole disk (NVMe, SATA/USB, virtio, SD). The kernel default is already sensible for most machines; 'bfq' can keep a desktop responsive during heavy disk activity, 'none' is right for fast NVMe.",
+			ID: "io.scheduler", Name: "Choose how the kernel orders disk requests",
+			Summary:  "Pick the policy that decides which disk requests go first.",
+			Details:  "Writes the I/O scheduler of each whole disk (NVMe, SATA/USB, virtio, SD). The kernel default suits most machines; 'bfq' can keep a desktop responsive during heavy disk activity, 'none' is right for fast NVMe.",
+			Helps:    "Desktops that freeze during heavy disk use (bfq); fast NVMe drives (none).",
 			Tradeoff: "Only choose differently if you see the disk starving interactive programs (Doctor shows disk stall pressure). Wrong choices can reduce throughput.",
 			Evidence: "Compare disk pressure and your real task's duration before and after, over several runs.",
 			Category: CatStorage, Tier: TierAdvanced, Risk: RiskLow, Scope: ScopeUntilBoot,

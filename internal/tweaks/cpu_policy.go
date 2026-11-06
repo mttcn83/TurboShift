@@ -22,9 +22,10 @@ type CPUPolicy struct{}
 func (CPUPolicy) Meta() Meta {
 	return Meta{
 		ID:       "cpu.governor",
-		Name:     "CPU governor (direct)",
-		Summary:  "Set the CPU frequency governor on every core. Only offered when no power manager is running.",
-		Details:  "Writes scaling_governor for each CPU under /sys/devices/system/cpu/*/cpufreq. The write goes through a single allowlisted, validated helper that asks for administrator permission; TurboShift itself keeps running as your normal user.",
+		Name:     "CPU speed policy (governor)",
+		Summary:  "Tell every CPU core how eagerly to run fast. Offered only when no power manager is in charge.",
+		Details:  "Sets the scaling governor on every core: 'performance' keeps clocks high all the time, 'powersave' lets them drop. The write goes through one allowlisted, validated helper that asks for administrator permission; TurboShift itself keeps running as your normal user.",
+		Helps:    "Desktops and servers without power-profiles-daemon, TLP or TuneD that want steady high clocks during a game or a build.",
 		Tradeoff: "The 'performance' governor keeps clocks high: more heat, noise and idle power, and often no FPS gain in GPU-bound games. The setting lasts until reboot and is not remembered across boots.",
 		Evidence: "Compare MangoHud runs (≥4 per governor). With intel_pstate/amd-pstate in active mode the hardware already scales quickly, so differences are often within noise.",
 		Category: CatCPU, Tier: TierAdvanced, Risk: RiskMedium, Scope: ScopeUntilBoot,

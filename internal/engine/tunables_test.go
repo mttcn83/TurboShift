@@ -31,7 +31,9 @@ const (
 
 func swapOn(r *detect.Report) { r.Memory.SwapTotalKB = 8 << 20 }
 
-func fileCases() []fileCase {
+func fileCases() []fileCase { return append(coreFileCases(), moreFileCases()...) }
+
+func coreFileCases() []fileCase {
 	return []fileCase{
 		{id: "cpu.epp", param: "preference", value: "performance",
 			seed: map[string]string{cpu0 + "energy_performance_preference": "balance_power\n", cpu1 + "energy_performance_preference": "power\n"},

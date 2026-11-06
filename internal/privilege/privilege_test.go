@@ -2,6 +2,7 @@ package privilege
 
 import (
 	"context"
+	"encoding/xml"
 	"errors"
 	"io/fs"
 	"os"
@@ -345,6 +346,73 @@ func TestAllowlistCoversExactlyTheKnownKernelAttributes(t *testing.T) {
 	}
 }
 
+func TestSecondWaveRulesAcceptOnlyTheirOwnValues(t *testing.T) {
+	ok := []Action{
+		{OpWriteSysfs, "/sys/block/nvme0n1/queue/rq_affinity", "2"},
+		{OpWriteSysfs, "/sys/block/sda/queue/nomerges", "2"},
+		{OpWriteSysfs, "/sys/block/sda/queue/add_random", "0"},
+		{OpWriteSysfs, "/sys/devices/system/cpu/intel_pstate/min_perf_pct", "100"},
+		{OpWriteSysfs, "/sys/devices/system/cpu/intel_pstate/hwp_dynamic_boost", "1"},
+		{OpWriteSysfs, "/sys/module/usbhid/parameters/mousepoll", "1"},
+		{OpWriteSysfs, "/sys/module/usbhid/parameters/jspoll", "8"},
+		{OpWriteSysfs, "/proc/sys/kernel/nmi_watchdog", "0"},
+		{OpWriteSysfs, "/proc/sys/vm/stat_interval", "10"},
+		{OpWriteSysfs, "/proc/sys/vm/min_free_kbytes", "131072"},
+		{OpWriteSysfs, "/proc/sys/vm/watermark_scale_factor", "125"},
+		{OpWriteSysfs, "/proc/sys/vm/dirty_writeback_centisecs", "1500"},
+		{OpWriteSysfs, "/sys/kernel/mm/ksm/run", "0"},
+		{OpWriteSysfs, "/sys/kernel/mm/transparent_hugepage/defrag", "defer+madvise"},
+		{OpWriteSysfs, "/sys/module/zswap/parameters/enabled", "1"},
+		{OpWriteSysfs, "/sys/module/zswap/parameters/compressor", "zstd"},
+		{OpWriteSysfs, "/sys/class/drm/card0/gt_min_freq_mhz", "700"},
+		{OpWriteSysfs, "/sys/bus/pci/devices/0000:01:00.0/power/control", "on"},
+		{OpWriteSysfs, "/proc/sys/net/ipv4/tcp_notsent_lowat", "4294967295"},
+		{OpWriteSysfs, "/proc/sys/net/core/rmem_max", "16777216"},
+		{OpWriteSysfs, "/proc/sys/net/core/netdev_max_backlog", "5000"},
+		{OpWriteSysfs, "/proc/sys/net/ipv4/tcp_mtu_probing", "1"},
+		{OpWriteSysfs, "/proc/sys/net/ipv4/tcp_ecn", "1"},
+	}
+	for _, a := range ok {
+		if err := Validate(a); err != nil {
+			t.Errorf("%+v: %v", a, err)
+		}
+	}
+	bad := []Action{
+		{OpWriteSysfs, "/sys/block/sda/queue/rq_affinity", "3"},
+		{OpWriteSysfs, "/sys/block/loop0/queue/nomerges", "2"},
+		{OpWriteSysfs, "/sys/block/sda/queue/add_random", "2"},
+		{OpWriteSysfs, "/sys/devices/system/cpu/intel_pstate/min_perf_pct", "101"},
+		{OpWriteSysfs, "/sys/module/usbhid/parameters/mousepoll", "99999"},
+		{OpWriteSysfs, "/sys/module/usbhid/parameters/quirks", "1"},
+		{OpWriteSysfs, "/proc/sys/kernel/nmi_watchdog", "2"},
+		{OpWriteSysfs, "/proc/sys/vm/min_free_kbytes", "1"},
+		{OpWriteSysfs, "/proc/sys/vm/min_free_kbytes", "1000000000"},
+		{OpWriteSysfs, "/sys/kernel/mm/ksm/run", "2"},
+		{OpWriteSysfs, "/sys/kernel/mm/ksm/pages_to_scan", "100"},
+		{OpWriteSysfs, "/sys/kernel/mm/transparent_hugepage/defrag", "always never"},
+		{OpWriteSysfs, "/sys/module/zswap/parameters/enabled", "2"},
+		{OpWriteSysfs, "/sys/module/zswap/parameters/compressor", "../x"},
+		{OpWriteSysfs, "/sys/class/drm/card0/gt_max_freq_mhz", "700"},
+		{OpWriteSysfs, "/sys/class/drm/card0/gt_min_freq_mhz", "1e3"},
+		{OpWriteSysfs, "/sys/bus/pci/devices/0000:01:00.0/power/control", "suspend"},
+		{OpWriteSysfs, "/sys/bus/pci/devices/0000:01:00.0/remove", "1"},
+		{OpWriteSysfs, "/sys/bus/pci/devices/../0000:01:00.0/power/control", "on"},
+		{OpWriteSysfs, "/proc/sys/net/core/rmem_max", "1"},
+		{OpWriteSysfs, "/proc/sys/net/ipv4/tcp_ecn", "3"},
+		{OpWriteSysfs, "/proc/sys/net/ipv4/ip_local_port_range", "1 2"},
+	}
+	for _, a := range bad {
+		if err := Validate(a); !errors.Is(err, ErrDenied) {
+			t.Errorf("%+v should be denied, got %v", a, err)
+		}
+	}
+	for in, want := range map[string]string{"Y": "1", "N\n": "0", "1": "1", "0": "0", "weird": "weird"} {
+		if got := BoolChoice(in); got != want {
+			t.Errorf("BoolChoice(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
 func TestActiveChoiceAndSchedulerReadback(t *testing.T) {
 	for in, want := range map[string]string{
 		"none [mq-deadline] kyber bfq": "mq-deadline",
@@ -362,5 +430,52 @@ func TestActiveChoiceAndSchedulerReadback(t *testing.T) {
 	res, err := Direct{FS: fs}.Do(context.Background(), Action{OpWriteSysfs, sched, "kyber"})
 	if err != nil || res.Previous != "none" {
 		t.Fatalf("res=%+v err=%v", res, err)
+	}
+}
+
+// The shipped polkit action must name only the helper subcommand: a policy
+// that matched any argument would let `turbo <anything>` keep an authorisation.
+func TestPolkitPolicyCoversOnlyTheHelper(t *testing.T) {
+	b, err := os.ReadFile("../../packaging/polkit/io.github.mttcn83.turboshift.policy.in")
+	if err != nil {
+		// Pre-built test binaries are run outside a checkout (distro-test.sh).
+		if _, e := os.Stat("../../go.mod"); e != nil {
+			t.Skip("not running inside the source tree")
+		}
+		t.Fatal(err)
+	}
+	var doc struct {
+		Actions []struct {
+			ID       string `xml:"id,attr"`
+			Defaults struct {
+				AllowAny, AllowInactive, AllowActive string
+			} `xml:"defaults"`
+			Annotate []struct {
+				Key   string `xml:"key,attr"`
+				Value string `xml:",chardata"`
+			} `xml:"annotate"`
+		} `xml:"action"`
+	}
+	dec := xml.NewDecoder(strings.NewReader(string(b)))
+	dec.Strict = false
+	dec.Entity = xml.HTMLEntity
+	if err := dec.Decode(&doc); err != nil {
+		t.Fatalf("policy is not well-formed XML: %v", err)
+	}
+	if len(doc.Actions) != 1 {
+		t.Fatalf("want exactly one action, got %d", len(doc.Actions))
+	}
+	got := map[string]string{}
+	for _, a := range doc.Actions[0].Annotate {
+		got[a.Key] = strings.TrimSpace(a.Value)
+	}
+	if got["org.freedesktop.policykit.exec.argv1"] != HelperCommand {
+		t.Errorf("argv1 = %q, want %q", got["org.freedesktop.policykit.exec.argv1"], HelperCommand)
+	}
+	if got["org.freedesktop.policykit.exec.path"] != "@BINARY@" {
+		t.Errorf("exec.path must be the install-time placeholder, got %q", got["org.freedesktop.policykit.exec.path"])
+	}
+	if !strings.Contains(string(b), "<allow_any>auth_admin</allow_any>") || !strings.Contains(string(b), "<allow_inactive>auth_admin</allow_inactive>") {
+		t.Error("only an active local session may keep the authorisation; remote and inactive sessions must always be asked")
 	}
 }

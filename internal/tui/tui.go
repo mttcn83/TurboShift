@@ -146,9 +146,11 @@ type Model struct {
 	toastOK bool
 	toastAt time.Time
 
-	modal       *modal
-	interrupted []*snapshot.Snapshot
-	hits        []hit // from the last render, used by mouse handling in View.OnMouse
+	modal         *modal
+	pendingPreset string // preset to start once the running scan finishes
+	lockedNote    string // set when admin tweaks are locked because turbo is not installed system-wide
+	interrupted   []*snapshot.Snapshot
+	hits          []hit // from the last render, used by mouse handling in View.OnMouse
 
 	opt optState
 	doc docState

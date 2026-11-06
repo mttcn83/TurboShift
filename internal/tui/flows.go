@@ -119,6 +119,7 @@ func (m *Model) startScan(thenOptimize bool) tea.Cmd {
 func (m *Model) onScanDone(msg scanDoneMsg) tea.Cmd {
 	m.busy = nil
 	if msg.cancelled {
+		m.pendingPreset = ""
 		m.notify(false, "Scan cancelled.")
 		return nil
 	}
@@ -126,6 +127,10 @@ func (m *Model) onScanDone(msg scanDoneMsg) tea.Cmd {
 	m.findings, m.assess, m.top = msg.findings, msg.assess, msg.top
 	m.interrupted = msg.interrupted
 	m.scanned, m.scanAt = true, time.Now()
+	m.lockedNote = ""
+	if ok, why := m.app.Priv().Available(); !ok && strings.Contains(why, "administrator actions are disabled") {
+		m.lockedNote = "Most tweaks are locked: turbo is not installed system-wide. Run `sudo make install`, then restart."
+	}
 	// Pre-select only what is both Recommended-tier and recommended by live
 	// evidence; anything else stays opt-in.
 	for _, t := range m.app.Reg.All() {
@@ -146,6 +151,10 @@ func (m *Model) onScanDone(msg scanDoneMsg) tea.Cmd {
 	rec := len(m.recommended())
 	if msg.optimize {
 		return m.optimizeRecommended()
+	}
+	if id := m.pendingPreset; id != "" {
+		m.pendingPreset = ""
+		return m.startPreset(id)
 	}
 	m.notify(true, fmt.Sprintf("Scan complete: %d warning(s), %d notice(s), %d recommended change(s).", warn, note, rec))
 	if len(m.interrupted) > 0 && m.modal == nil {

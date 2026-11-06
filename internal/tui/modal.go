@@ -222,6 +222,10 @@ func (m *Model) modalAct(id string) tea.Cmd {
 	if md == nil {
 		return nil
 	}
+	if strings.HasPrefix(id, "preset:") {
+		m.modal = nil
+		return m.startPreset(strings.TrimPrefix(id, "preset:"))
+	}
 	switch id {
 	case "close":
 		m.modal = nil
@@ -258,6 +262,9 @@ func (m *Model) openHelp() {
 		{"↑/↓, PgUp/PgDn", "move in lists (mouse wheel works too)"},
 		{"Space / Enter", "select / open or confirm"},
 		{"/", "search the optimization catalog"},
+		{"g d n m", "Dashboard goals: Gaming, Snappy desktop, Network, Maximum (preview first)"},
+		{"u", "undo the last change TurboShift made (Dashboard)"},
+		{"p / c", "Optimizer: pick a preset / filter by category"},
 		{"s", "scan my PC (Dashboard)"},
 		{"o", "optimize my PC: preview first, nothing changes until you confirm"},
 		{"Esc", "close a dialog or cancel typing"},

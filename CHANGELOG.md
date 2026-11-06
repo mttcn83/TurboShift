@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.3.0
+
+Catalogue grows from 26 to **54** optimizations, adds ready-made presets, and every description is rewritten in plain English.
+
+- **New kernel tweaks (28):** `net.notsent-lowat`, `net.buffers`, `net.backlog`, `net.mtu-probing`, `net.ecn`; `cpu.min-perf`, `cpu.hwp-boost`, `sys.watchdog`; new *Input & Latency* category with `input.mouse-poll`, `input.kb-poll`, `input.pad-poll` (USB report rate); `mem.zswap`, `mem.zswap-compressor`, `mem.thp-defrag`, `mem.min-free`, `mem.watermark-scale`, `mem.ksm`, `mem.stat-interval`, `mem.writeback-timing`; `io.rq-affinity`, `io.nomerges`, `io.add-random`; `gpu.intel-min-clock`, `gpu.dgpu-awake`.
+- **New desktop tweaks (4):** new *Desktop & Graphics* category with `desktop.hypr-effects` (animations, blur, shadows), `desktop.hypr-tearing`, `desktop.hypr-direct-scanout` and `desktop.gnome-animations`. They need no root, go through `hyprctl`/`gsettings`, and are restored key by key.
+- **Presets:** `gaming`, `desktop`, `network`, `maximum`. TUI: press `p` in the Optimizer (ticks the applicable items, nothing is applied until you confirm the preview). CLI: `turbo preset list | show | apply [--dry-run] [--yes]`. Items that do not fit the machine are skipped and listed.
+- **Plain-English rewrite:** every tweak has a human title, a one-sentence benefit, an explanation, a new *Who it helps* line, the real trade-off and how to measure it. The Optimizer shows option labels ("Never suspend") instead of raw values ("-1"), and gives the tweak name more room in the list.
+- **One password prompt per preset:** `make install` now also installs a polkit action for `turbo __priv` (active local sessions keep one authorisation for polkit's normal retention time). Not yet exercised against a live polkit daemon.
+- **Easier to read at first look:** the Dashboard now shows a "What do you want to do?" box with one-key goals (`g` Gaming, `d` Snappy desktop, `n` Network, `m` Maximum) and a plain next-step line; `u` undoes the last change. Picking a goal or a preset goes straight to the preview (scanning first if needed). The Optimizer has a category filter (`c`) and shows human option labels. CLI: `turbo undo`, a Quick start block in `--help`, and `tweaks list` grouped by category that hides tweaks your PC cannot do (`--all` shows them).
+- Root helper allowlist widened from 25 to 45 anchored path+value rules (still no command execution or wildcards across `/`); new rules are covered by accept/deny tests, including `BoolChoice` read-back for zswap.
+- Tests: an end-to-end apply, verify and exact-restore case for every kernel tweak, fake `hyprctl`/`gsettings` in the simulated machine, preset resolution tests, and a guard that every tweak has a test and complete plain-language metadata.
+- Deliberately not added: disabling CPU mitigations, hosts-file ad blocking and Windows-only items (see `docs/ROADMAP.md`).
+
+**Verified:** gofmt, `go vet`, staticcheck and `go test -race ./...` clean; clean install, CLI/TUI smoke (including the new preset commands) and the full unit suite on Arch, Ubuntu 24.04, Debian 12, Fedora 42 and openSUSE Tumbleweed containers as root and uid 1000 (10 runs, 515 checks, 0 failures); read-only `turbo tweaks list` and `turbo preset show` on the author's real CachyOS/Hyprland machine.
+
+**Unverified:** applying any of the new tweaks on real hardware (so no performance gain is claimed), the polkit action against a live polkit daemon, real `hyprctl` option names across Hyprland versions.
+
 ## 0.2.0
 
 Catalogue grows from 3 to **26** optimizations, all through the same preview, restore point, verify and undo machinery.

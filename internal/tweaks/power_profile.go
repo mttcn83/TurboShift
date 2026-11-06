@@ -22,9 +22,10 @@ var ppdOptions = []Option{
 func (PowerProfile) Meta() Meta {
 	return Meta{
 		ID:       "power.profile",
-		Name:     "Power profile",
-		Summary:  "Pick the system power profile (Performance / Balanced / Power saver) through your desktop's own power service.",
-		Details:  "Changes the active profile in power-profiles-daemon. The daemon then adjusts CPU energy/performance bias and, on supported laptops, the firmware platform profile. TurboShift only asks the daemon; it does not write CPU settings itself.",
+		Name:     "Performance / balanced / power-saver mode",
+		Summary:  "Switch the whole system between speed and battery saving with one setting.",
+		Details:  "Changes the active profile in power-profiles-daemon, the service behind your desktop's power menu. The daemon then adjusts how eagerly the CPU speeds up and, on supported laptops, the firmware's fan and power limits. TurboShift only asks the daemon; it never writes CPU files itself.",
+		Helps:    "Laptops and PCs that were left in Power saver while plugged in, or that you want in Performance for a gaming session.",
 		Tradeoff: "Performance raises power draw, temperature and fan noise, and drains the battery faster. It only helps when the CPU, not the GPU or network, is the limit — a GPU-bound game may show no FPS change at all.",
 		Evidence: "Compare frame times with MangoHud logs in Benchmark Lab (≥4 runs per profile). Expect little change in GPU-bound games.",
 		Category: CatCPU, Tier: TierRecommended, Risk: RiskLow, Scope: ScopePersistent,

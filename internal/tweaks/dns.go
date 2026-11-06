@@ -36,9 +36,10 @@ var dnsOptions = []Option{
 
 func (DNSResolver) Meta() Meta {
 	return Meta{
-		ID: "net.dns", Name: "DNS servers",
-		Summary:  "Use a different DNS resolver on this connection if your router's or ISP's is slow.",
-		Details:  "Sets ipv4.dns and ipv4.ignore-auto-dns on the active NetworkManager connection and re-applies it to the adapter. DNS decides how fast names like game servers or websites are looked up; it does not change the speed or ping of the connection itself or in-game latency. Only IPv4 servers are changed.",
+		ID: "net.dns", Name: "Faster website and game-server lookups (DNS)",
+		Summary:  "Use a different DNS service on this connection if your router's or ISP's is slow.",
+		Details:  "Sets the DNS servers (and turns off automatic ones) on the active NetworkManager connection and re-applies it to the adapter. DNS decides how quickly names like websites and game servers are looked up; it does not change the speed or ping of the connection itself. Only IPv4 servers are changed.",
+		Helps:    "Connections where Network Doctor shows slow or inconsistent DNS lookups.",
 		Tradeoff: "The resolver you pick sees every name you look up. A resolver closer to you can be faster, a farther one slower, and some networks (company, captive portal, local names) need their own DNS.",
 		Evidence: "Network Doctor's DNS timings: compare first-lookup and median times before and after, over several runs.",
 		Category: CatNetwork, Tier: TierSituational, Risk: RiskLow, Scope: ScopePersistent,

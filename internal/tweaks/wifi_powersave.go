@@ -39,9 +39,10 @@ var paramToNM = map[string]string{"off": nmDisable, "on": nmEnable, "default": n
 func (WifiPowerSave) Meta() Meta {
 	return Meta{
 		ID:       "net.wifi-powersave",
-		Name:     "Wi-Fi power saving",
-		Summary:  "Turn Wi-Fi power saving off (or back on) for the network you are connected to.",
-		Details:  "Sets 802-11-wireless.powersave on the active NetworkManager Wi-Fi connection and re-applies it to the adapter without a full reconnect. With power saving on, the radio sleeps between packets and wakes on the access point's beacon, which can add small, variable delays.",
+		Name:     "Steadier Wi-Fi (turn off radio power saving)",
+		Summary:  "Stop the Wi-Fi radio from napping between packets, which can add small, random delays.",
+		Details:  "Sets the power-save option of your active NetworkManager Wi-Fi connection and re-applies it to the adapter without a full reconnect. With power saving on, the radio sleeps between packets and wakes on the access point's beacon.",
+		Helps:    "Laptops on a good Wi-Fi signal that see jitter or lag spikes in calls and games while plugged in.",
 		Tradeoff: "Uses more battery on laptops. It is not a fix for a weak signal, a congested channel or router/ISP problems — if Network Doctor shows those, power saving is not your bottleneck.",
 		Evidence: "Run Network Doctor before and after: compare gateway jitter and p95 latency over a few runs. If they do not improve, switch it back.",
 		Category: CatNetwork, Tier: TierSituational, Risk: RiskLow, Scope: ScopePersistent,

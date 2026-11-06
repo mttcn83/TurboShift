@@ -22,11 +22,11 @@ func (m *Model) initScreens() {
 func (m *Model) screenHints() []string {
 	switch m.screen {
 	case ScrDashboard:
-		return []string{m.hint("s", "scan my PC"), m.hint("o", "optimize"), m.hint("Tab", "next screen")}
+		return []string{m.hint("g/d/n/m", "run a goal"), m.hint("o", "recommended"), m.hint("u", "undo"), m.hint("s", "scan"), m.hint("Tab", "next")}
 	case ScrDoctor:
 		return []string{m.hint("r", "rescan"), m.hint("Enter", "details/fix"), m.hint("↑↓", "move")}
 	case ScrOptimizer:
-		return []string{m.hint("Space", "select"), m.hint("←→", "option"), m.hint("a", "apply selected"), m.hint("/", "search")}
+		return []string{m.hint("Space", "tick"), m.hint("←→", "option"), m.hint("a", "apply ticked"), m.hint("p", "presets"), m.hint("c", "category"), m.hint("/", "search")}
 	case ScrGaming:
 		return []string{m.hint("Space", "toggle"), m.hint("c", "copy launch options"), m.hint("↑↓", "move")}
 	case ScrNetwork:
@@ -188,6 +188,10 @@ func (m *Model) act(id string) tea.Cmd {
 		return m.goScreen(Screen(n))
 	case "scan":
 		return m.startScan(false)
+	case "preset":
+		return m.startPreset(arg)
+	case "undo":
+		return m.undoLatest()
 	case "optimize":
 		return m.optimizeRecommended()
 	case "modal":

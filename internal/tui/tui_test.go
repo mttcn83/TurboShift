@@ -646,3 +646,100 @@ func TestCtrlCCancelsRunningOperationInsteadOfQuitting(t *testing.T) {
 		t.Fatalf("cancelled=%v cmd=%v", cancelled, cmd != nil)
 	}
 }
+
+func netSeed(m *simtest.Machine) {
+	m.FS.Set("/proc/sys/net/ipv4/tcp_congestion_control", "cubic\n").Set("/proc/sys/net/ipv4/tcp_available_congestion_control", "cubic bbr\n").
+		Set("/proc/sys/net/ipv4/tcp_ecn", "2\n").Set("/proc/sys/net/ipv4/tcp_slow_start_after_idle", "0\n")
+}
+
+func TestPresetFromTheOptimizerSelectsAndPreviewsButAppliesNothing(t *testing.T) {
+	r := newRig(t, netSeed)
+	r.press("3") // Optimizer, auto-scans
+	r.press("p")
+	if r.m.modal == nil || r.m.modal.title != "Presets: one-step bundles" {
+		t.Fatalf("p should open the presets dialog:\n%s", r.text())
+	}
+	r.wantText("Cut network lag")
+	r.wantText("settings apply here")
+	r.press("n")
+	if r.m.modal == nil || r.m.modal.kind != modalPreview {
+		t.Fatalf("choosing a preset should go straight to the preview:\n%s", r.text())
+	}
+	r.wantText("TCP congestion")
+	c := r.m.opt.checked
+	if !c["net.tcp-cc"] || !c["net.ecn"] || c["net.tcp-idle"] || c["net.qdisc"] || c["cpu.boost"] {
+		t.Errorf("wrong selection: %v", c)
+	}
+	if len(r.snapshots()) != 0 || r.mach.Called("nmcli connection modify") {
+		t.Fatal("nothing may change before the preview is confirmed")
+	}
+	r.press("esc") // cancelled: still ticked so the user can adjust
+	if r.m.modal != nil || !r.m.opt.checked["net.tcp-cc"] || len(r.snapshots()) != 0 {
+		t.Fatal("cancelling must leave the selection and change nothing")
+	}
+}
+
+func TestDashboardGoalKeyScansThenPreviewsThenUndoes(t *testing.T) {
+	r := newRig(t, netSeed)
+	r.wantText("What do you want to do?")
+	r.wantText("Cut network lag")
+	r.wantText("Start here:")
+	r.press("n") // not scanned yet: scans, then previews
+	if r.m.modal == nil || r.m.modal.kind != modalPreview {
+		t.Fatalf("one key should reach the preview:\n%s", r.text())
+	}
+	if len(r.snapshots()) != 0 {
+		t.Fatal("the preview must not create a restore point")
+	}
+	r.press("enter")
+	r.wantText("Applied and verified")
+	if v, _ := r.mach.FS.Get("/proc/sys/net/ipv4/tcp_congestion_control"); strings.TrimSpace(v) != "bbr" {
+		t.Fatalf("not applied: %q", v)
+	}
+	r.press("esc", "1", "u")
+	if r.m.modal == nil || r.m.modal.kind != modalConfirm {
+		t.Fatalf("u should ask to undo the last change:\n%s", r.text())
+	}
+	r.press("enter")
+	r.wantText("Restore finished")
+	if v, _ := r.mach.FS.Get("/proc/sys/net/ipv4/tcp_congestion_control"); strings.TrimSpace(v) != "cubic" {
+		t.Errorf("not undone: %q", v)
+	}
+}
+
+func TestUndoWithNothingToUndoSaysSo(t *testing.T) {
+	r := newRig(t)
+	r.press("u")
+	if r.m.modal != nil {
+		t.Fatal("no dialog expected")
+	}
+	r.wantText("Nothing to undo")
+}
+
+func TestOptimizerCategoryFilterCycles(t *testing.T) {
+	r := newRig(t)
+	r.press("3")
+	all := len(r.m.visibleTweaks())
+	r.press("c")
+	first := r.m.visibleTweaks()
+	if len(first) == 0 || len(first) >= all {
+		t.Fatalf("category filter should narrow the list: %d of %d", len(first), all)
+	}
+	cat := first[0].Meta().Category
+	for _, tw := range first {
+		if tw.Meta().Category != cat {
+			t.Fatal("mixed categories under a filter")
+		}
+	}
+	r.wantText("category: " + string(cat))
+	r.press("esc")
+	if len(r.m.visibleTweaks()) != all {
+		t.Fatal("Esc should show every category again")
+	}
+	for i := 0; i < 20 && r.m.opt.cat != ""; i++ { // cycling returns to All
+		r.press("c")
+	}
+	if len(r.m.visibleTweaks()) != all {
+		t.Fatal("cycling past the last category should return to All")
+	}
+}

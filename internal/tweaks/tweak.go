@@ -60,6 +60,8 @@ const (
 	CatGaming  Category = "Gaming"
 	CatMemory  Category = "Memory"
 	CatStorage Category = "Storage"
+	CatInput   Category = "Input & Latency"
+	CatDesktop Category = "Desktop & Graphics"
 )
 
 // Scope describes how long a change lasts.
@@ -102,6 +104,7 @@ type Meta struct {
 	Name     string
 	Summary  string // one plain-language sentence
 	Details  string // what exactly it changes and why it can help
+	Helps    string // who benefits and in which situation
 	Tradeoff string // the real cost
 	Evidence string // how to measure whether it helped
 	Category Category
@@ -275,10 +278,17 @@ func Default() *Registry {
 	r.Register(CPUPolicy{})
 	r.Register(CPUEnergyPreference())
 	r.Register(CPUBoost())
+	r.Register(CPUMinPerf())
+	r.Register(CPUHWPBoost())
 	r.Register(PlatformProfile())
 	r.Register(SchedAutogroup())
+	r.Register(NMIWatchdog())
 	r.Register(PCIeASPM())
 	r.Register(USBAutosuspend())
+	// Input & latency
+	r.Register(MousePoll())
+	r.Register(KeyboardPoll())
+	r.Register(GamepadPoll())
 	// Network
 	r.Register(WifiPowerSave{})
 	r.Register(DNSResolver{})
@@ -286,21 +296,44 @@ func Default() *Registry {
 	r.Register(DefaultQdisc())
 	r.Register(TCPFastOpen())
 	r.Register(TCPSlowStartAfterIdle())
+	r.Register(TCPNotsentLowat())
+	r.Register(TCPBuffers())
 	r.Register(NetdevBudget())
+	r.Register(NetdevBacklog())
+	r.Register(TCPMTUProbing())
+	r.Register(TCPECN())
 	// Memory
 	r.Register(Swappiness())
+	r.Register(Zswap())
+	r.Register(ZswapCompressor())
 	r.Register(PageCluster())
 	r.Register(VFSCachePressure())
 	r.Register(CompactionProactiveness())
 	r.Register(TransparentHugepages())
+	r.Register(THPDefrag())
+	r.Register(MinFree())
+	r.Register(WatermarkScale())
+	r.Register(KSM())
+	r.Register(StatInterval())
 	// Storage
 	r.Register(IOScheduler())
 	r.Register(ReadAhead())
+	r.Register(RQAffinity())
+	r.Register(NoMerges())
+	r.Register(AddRandom())
 	r.Register(DirtyWriteback())
-	// Gaming
+	r.Register(WritebackTiming())
+	// Gaming & graphics
 	r.Register(MaxMapCount())
 	r.Register(SplitLockMitigate())
 	r.Register(AMDGPUPerformanceLevel())
+	r.Register(IntelGPUMinClock())
+	r.Register(DGPUAwake())
+	// Desktop
+	r.Register(HyprEffects())
+	r.Register(HyprTearing())
+	r.Register(HyprDirectScanout())
+	r.Register(GnomeAnimations())
 	return r
 }
 

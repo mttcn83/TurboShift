@@ -27,6 +27,13 @@ const usage = `TurboShift — a free, local-only Linux performance optimizer.
 
 Run "turbo" with no arguments for the interactive app (recommended).
 
+Quick start
+  turbo                          the interactive app
+  turbo doctor                   what is limiting this PC? (read-only)
+  turbo preset show gaming       preview a ready-made goal: gaming, desktop, network, maximum
+  turbo preset apply gaming      apply it (asks first; restore point saved)
+  turbo undo                     put back what the last change altered
+
 Usage: turbo [command] [options]
 
 Diagnose (read-only, no root needed)
@@ -35,9 +42,12 @@ Diagnose (read-only, no root needed)
   status                         one-screen summary and pending recovery
 
 Optimize (reversible; every change is journaled first)
-  tweaks list                    what exists and whether it applies here
+  tweaks list [--all]            what can be changed on this PC (--all: and why not the rest)
   tweaks show <id>               details, risks, how to measure it
   apply <id>=<value>... [--dry-run] [--yes]
+  preset list | show <id> | apply <id> [--dry-run] [--yes]
+                                 ready-made bundles: gaming, desktop, network, maximum
+  undo [--yes]                   undo the most recent change
   snapshots list | show <id> | restore <id> [--force] | recover
 
 Measure
@@ -81,6 +91,10 @@ func Run(ctx context.Context, a *app.App, args []string, stdout, stderr io.Write
 		return cmdTweaks(ctx, a, rest, o)
 	case "apply":
 		return cmdApply(ctx, a, rest, o)
+	case "preset", "presets":
+		return cmdPreset(ctx, a, rest, o)
+	case "undo":
+		return cmdUndo(ctx, a, rest, o)
 	case "snapshots", "snapshot":
 		return cmdSnapshots(ctx, a, rest, o)
 	case "network":

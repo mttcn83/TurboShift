@@ -65,6 +65,13 @@ var (
 	bigVal   = regexp.MustCompile(`^[0-9]{5,10}$`)
 	tcpFOVal = regexp.MustCompile(`^[0-3]$`)
 	usbVal   = regexp.MustCompile(`^(-1|[0-9]{1,3})$`)
+	zeroTwo  = regexp.MustCompile(`^[0-2]$`)
+	plusVal  = regexp.MustCompile(`^[a-z0-9_+-]{1,32}$`)
+	onAuto   = regexp.MustCompile(`^(on|auto)$`)
+	num5     = regexp.MustCompile(`^[0-9]{1,5}$`)
+	num10    = regexp.MustCompile(`^[0-9]{1,10}$`)
+	bufVal   = regexp.MustCompile(`^[0-9]{5,9}$`)
+	minFree  = regexp.MustCompile(`^[0-9]{4,8}$`)
 
 	// rules is the complete list of things the root helper will ever write.
 	// Every pattern is anchored and contains no wildcard that could match a
@@ -95,6 +102,26 @@ var (
 		{regexp.MustCompile(`^/sys/class/drm/card[0-9]{1,2}/device/power_dpm_force_performance_level$`), tokenVal, nil},
 		{regexp.MustCompile(`^/sys/block/(nvme[0-9]{1,3}n[0-9]{1,3}|sd[a-z]{1,3}|vd[a-z]{1,3}|mmcblk[0-9]{1,3})/queue/read_ahead_kb$`), smallVal, nil},
 		{regexp.MustCompile(`^/sys/block/(nvme[0-9]{1,3}n[0-9]{1,3}|sd[a-z]{1,3}|vd[a-z]{1,3}|mmcblk[0-9]{1,3})/queue/scheduler$`), tokenVal, ActiveChoice},
+		{regexp.MustCompile(`^/sys/block/(nvme[0-9]{1,3}n[0-9]{1,3}|sd[a-z]{1,3}|vd[a-z]{1,3}|mmcblk[0-9]{1,3})/queue/(rq_affinity|nomerges)$`), zeroTwo, nil},
+		{regexp.MustCompile(`^/sys/block/(nvme[0-9]{1,3}n[0-9]{1,3}|sd[a-z]{1,3}|vd[a-z]{1,3}|mmcblk[0-9]{1,3})/queue/add_random$`), flagVal, nil},
+		{regexp.MustCompile(`^/sys/devices/system/cpu/intel_pstate/min_perf_pct$`), pctVal, nil},
+		{regexp.MustCompile(`^/sys/devices/system/cpu/intel_pstate/hwp_dynamic_boost$`), flagVal, nil},
+		{regexp.MustCompile(`^/sys/module/usbhid/parameters/(mousepoll|kbpoll|jspoll)$`), smallVal, nil},
+		{regexp.MustCompile(`^/proc/sys/kernel/nmi_watchdog$`), flagVal, nil},
+		{regexp.MustCompile(`^/proc/sys/vm/stat_interval$`), smallVal, nil},
+		{regexp.MustCompile(`^/proc/sys/vm/min_free_kbytes$`), minFree, nil},
+		{regexp.MustCompile(`^/proc/sys/vm/watermark_scale_factor$`), smallVal, nil},
+		{regexp.MustCompile(`^/proc/sys/vm/(dirty_writeback_centisecs|dirty_expire_centisecs)$`), num5, nil},
+		{regexp.MustCompile(`^/sys/kernel/mm/ksm/run$`), flagVal, nil},
+		{regexp.MustCompile(`^/sys/kernel/mm/transparent_hugepage/defrag$`), plusVal, ActiveChoice},
+		{regexp.MustCompile(`^/sys/module/zswap/parameters/enabled$`), flagVal, BoolChoice},
+		{regexp.MustCompile(`^/sys/module/zswap/parameters/compressor$`), tokenVal, nil},
+		{regexp.MustCompile(`^/sys/class/drm/card[0-9]{1,2}/gt_min_freq_mhz$`), smallVal, nil},
+		{regexp.MustCompile(`^/sys/bus/pci/devices/[0-9a-f]{4}:[0-9a-f]{2}:[0-9a-f]{2}\.[0-7]/power/control$`), onAuto, nil},
+		{regexp.MustCompile(`^/proc/sys/net/ipv4/tcp_notsent_lowat$`), num10, nil},
+		{regexp.MustCompile(`^/proc/sys/net/core/(rmem_max|wmem_max)$`), bufVal, nil},
+		{regexp.MustCompile(`^/proc/sys/net/core/netdev_max_backlog$`), regexp.MustCompile(`^[0-9]{3,6}$`), nil},
+		{regexp.MustCompile(`^/proc/sys/net/ipv4/(tcp_mtu_probing|tcp_ecn)$`), zeroTwo, nil},
 	}
 )
 
@@ -108,6 +135,17 @@ func ActiveChoice(s string) string {
 		}
 	}
 	return s
+}
+
+// BoolChoice reads a kernel boolean that prints Y/N (or 1/0) as "1"/"0".
+func BoolChoice(s string) string {
+	switch strings.ToUpper(strings.TrimSpace(s)) {
+	case "Y", "1":
+		return "1"
+	case "N", "0":
+		return "0"
+	}
+	return strings.TrimSpace(s)
 }
 
 func ruleFor(path string) (rule, bool) {

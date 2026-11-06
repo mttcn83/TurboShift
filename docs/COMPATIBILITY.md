@@ -18,7 +18,7 @@ Anything unreadable is reported as unknown with a reason; it is never invented.
 
 ## Which tweaks need what
 
-Each tweak appears as *available* only when its kernel file exists and nothing else owns it, so on any machine a large part of the 26 will correctly read "not available":
+Each tweak appears as *available* only when its kernel file exists and nothing else owns it, so on any machine a large part of the 54 will correctly read "not available":
 
 | Needs | Tweaks |
 | --- | --- |
@@ -41,7 +41,7 @@ Used when present, otherwise the dependent feature explains what is missing: `po
 | --- | --- |
 | Simulated machine (tests, `-race`) | Full apply / verify / rollback / restore / recovery paths exercised |
 | Arch-based hybrid-graphics laptop, read-only run of the real binary | Detection, Doctor, Optimizer preview, TUI screens verified |
-| Applying changes with real `powerprofilesctl` / `nmcli` / real kernel files on real hardware (all 26 tweaks) | **Not yet verified**; every tweak is tested end to end against the simulated machine only |
+| Applying changes with real `powerprofilesctl` / `nmcli` / real kernel files on real hardware (all 54 tweaks) | **Not yet verified**; every tweak is tested end to end against the simulated machine only (Hyprland and GNOME tweaks use a fake `hyprctl`/`gsettings`, so real option names across Hyprland versions are unverified) |
 | Real NetworkManager checkpoint, real polkit prompt | **Not yet verified** |
 | Real MangoHud logs | **Not yet verified** (parser written from MangoHud's source) |
 | Container matrix (`scripts/distro-test.sh`): Arch, Ubuntu 24.04, Debian 12, Fedora 42, openSUSE Tumbleweed; root and uid 1000 | **Passed 10/10**: clean install, CLI, graceful "not available" on missing power manager, privileged-helper refusals, TUI in a pty at 80×24 and large, all 11 unit-test packages. Containers have no power manager/Wi-Fi/GPU, so tweaks themselves were not exercised there |

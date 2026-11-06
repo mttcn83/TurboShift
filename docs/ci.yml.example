@@ -1,0 +1,31 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: gofmt
+        run: test -z "$(gofmt -l .)" || (gofmt -l .; exit 1)
+      - name: vet
+        run: go vet ./...
+      - name: test (race detector)
+        run: go test -race -count=1 ./...
+      - name: build
+        run: go build -trimpath -o turbo ./cmd/turbo
+      - name: smoke
+        run: |
+          ./turbo --version
+          ./turbo --help > /dev/null
+          ./turbo doctor --json | python3 -c 'import json,sys; json.load(sys.stdin)'

@@ -28,7 +28,15 @@ Most "optimizers" apply a pile of tweaks and hope. TurboShift's rules:
 
 TurboShift is a single static binary for Linux (x86-64 or arm64). There is nothing to configure and no account to create.
 
-Build from source (about a minute). Needs Go 1.27+ and `git` (Arch: `sudo pacman -S go git` · Debian/Ubuntu: `sudo apt install golang git` · Fedora: `sudo dnf install golang git` · openSUSE: `sudo zypper install go git`; if your distro's Go is older than 1.27, get it from [go.dev/dl](https://go.dev/dl/)).
+**Option A: download a release binary** (no Go needed). From the [Releases page](https://github.com/mttcn83/TurboShift/releases) get `turbo-linux-amd64` (or `-arm64`) and `SHA256SUMS`, then:
+
+```bash
+sha256sum -c --ignore-missing SHA256SUMS
+sudo install -m755 turbo-linux-amd64 /usr/local/bin/turbo
+turbo
+```
+
+**Option B: build from source** (about a minute). Needs Go 1.27+ and `git` (Arch: `sudo pacman -S go git` · Debian/Ubuntu: `sudo apt install golang git` · Fedora: `sudo dnf install golang git` · openSUSE: `sudo zypper install go git`; if your distro's Go is older than 1.27, get it from [go.dev/dl](https://go.dev/dl/)).
 
 ```bash
 git clone https://github.com/mttcn83/TurboShift.git && cd TurboShift

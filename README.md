@@ -17,7 +17,7 @@ Run `turbo`. A terminal app opens: scan your PC, see what (if anything) is worth
 
 Most "optimizers" apply a pile of tweaks and hope. TurboShift's rules:
 
-- **Evidence first.** Every recommendation names the measurement behind it ("Power-saver profile is active while plugged in"). "Your PC is already well configured" is a valid, common result, and nothing is changed in that case.
+- **Evidence first.** Every recommendation names the measurement behind it ("Power-saver profile is inactive while plugged in"). "Your PC is already well configured" is a valid, common result, and nothing is changed in that case.
 - **No placebo tweaks.** A tweak ships only if it has a real mechanism, a stated trade-off, and a way to measure whether it helped. There is no "RAM cleaner" and no fake speed score.
 - **Reversible by construction.** Each change is previewed, journaled to disk *before* it happens, applied, then **verified against the live system** (not just "the command returned 0"). If any step fails, everything already changed is rolled back automatically. A crash mid-change is detected on the next start and offered for recovery.
 - **Never root.** The app runs as you. The single privileged operation (writing a CPU governor) goes through polkit (`pkexec`) to a helper that re-validates an allowlist of exactly one sysfs attribute pattern, and only when the binary is root-owned and not user-writable. There is no "run this command as root" primitive.

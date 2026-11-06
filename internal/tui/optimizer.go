@@ -47,6 +47,14 @@ func stateSummary(s tweaks.State) string {
 	return strings.Join(vals, "/")
 }
 
+// summaryOf describes a tweak's current state in a few words.
+func summaryOf(t tweaks.Tweak, s tweaks.State) string {
+	if sm, ok := t.(tweaks.Summarizer); ok {
+		return sm.Summary(s)
+	}
+	return stateSummary(s)
+}
+
 // visibleTweaks is the catalog filtered by the search box.
 func (m *Model) visibleTweaks() []tweaks.Tweak {
 	q := strings.ToLower(strings.TrimSpace(m.opt.search.val))
@@ -250,7 +258,7 @@ func (m *Model) viewOptimizer(w, h int) []string {
 			if len(opts) > 0 {
 				choice = opts[clampI(m.opt.choice[mt.ID], 0, len(opts)-1)].Value
 			}
-			state = m.th.Dim(stateSummary(as.Current)) + " " + m.gl.Arrow + " " + choice
+			state = m.th.Dim(summaryOf(vis[i], as.Current)) + " " + m.gl.Arrow + " " + choice
 		}
 		star := " "
 		if as.Available && as.Recommend != nil {
@@ -329,7 +337,7 @@ func (m *Model) tweakDetail(t tweaks.Tweak, w int) []string {
 		if as.Reason != "" {
 			d = append(d, "", m.th.Warn("Note: ")+as.Reason)
 		}
-		d = append(d, "", m.kv("Now", stateSummary(as.Current), 6))
+		d = append(d, "", m.kv("Now", summaryOf(t, as.Current), 6))
 		opts := optionsOf(mt, as)
 		cur := clampI(m.opt.choice[mt.ID], 0, max(0, len(opts)-1))
 		for i, o := range opts {

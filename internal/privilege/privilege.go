@@ -44,21 +44,91 @@ type Executor interface {
 	Available() (bool, string)
 }
 
+var ErrDenied = errors.New("privileged action refused by validation")
+
+// rule is one allowlisted kernel attribute: an anchored path pattern, the
+// only values that may be written to it, and how to read the attribute back
+// (some files list every choice and mark the active one).
+type rule struct {
+	path *regexp.Regexp
+	val  *regexp.Regexp
+	norm func(string) string
+}
+
 var (
-	ErrDenied  = errors.New("privileged action refused by validation")
-	cpufreqRe  = regexp.MustCompile(`^/sys/devices/system/cpu/cpu[0-9]{1,4}/cpufreq/scaling_governor$`)
-	sysfsValRe = regexp.MustCompile(`^[a-z0-9_-]{1,32}$`)
+	tokenVal = regexp.MustCompile(`^[a-z0-9_-]{1,32}$`)
+	flagVal  = regexp.MustCompile(`^[01]$`)
+	// vm.swappiness accepts 0-200.
+	swapVal  = regexp.MustCompile(`^([0-9]|[1-9][0-9]|1[0-9][0-9]|200)$`)
+	pctVal   = regexp.MustCompile(`^([0-9]|[1-9][0-9]|100)$`)
+	smallVal = regexp.MustCompile(`^[0-9]{1,4}$`)
+	bigVal   = regexp.MustCompile(`^[0-9]{5,10}$`)
+	tcpFOVal = regexp.MustCompile(`^[0-3]$`)
+	usbVal   = regexp.MustCompile(`^(-1|[0-9]{1,3})$`)
+
+	// rules is the complete list of things the root helper will ever write.
+	// Every pattern is anchored and contains no wildcard that could match a
+	// path separator, so ".." and symlink-style tricks cannot match.
+	rules = []rule{
+		{regexp.MustCompile(`^/sys/devices/system/cpu/cpu[0-9]{1,4}/cpufreq/scaling_governor$`), tokenVal, nil},
+		{regexp.MustCompile(`^/sys/devices/system/cpu/cpu[0-9]{1,4}/cpufreq/energy_performance_preference$`), tokenVal, nil},
+		{regexp.MustCompile(`^/sys/devices/system/cpu/intel_pstate/no_turbo$`), flagVal, nil},
+		{regexp.MustCompile(`^/sys/devices/system/cpu/cpufreq/boost$`), flagVal, nil},
+		{regexp.MustCompile(`^/sys/firmware/acpi/platform_profile$`), tokenVal, nil},
+		{regexp.MustCompile(`^/proc/sys/net/ipv4/tcp_congestion_control$`), tokenVal, nil},
+		{regexp.MustCompile(`^/proc/sys/vm/swappiness$`), swapVal, nil},
+		{regexp.MustCompile(`^/proc/sys/net/core/default_qdisc$`), tokenVal, nil},
+		{regexp.MustCompile(`^/proc/sys/net/core/netdev_budget$`), smallVal, nil},
+		{regexp.MustCompile(`^/proc/sys/net/ipv4/tcp_fastopen$`), tcpFOVal, nil},
+		{regexp.MustCompile(`^/proc/sys/net/ipv4/tcp_slow_start_after_idle$`), flagVal, nil},
+		{regexp.MustCompile(`^/proc/sys/vm/vfs_cache_pressure$`), smallVal, nil},
+		{regexp.MustCompile(`^/proc/sys/vm/dirty_background_ratio$`), pctVal, nil},
+		{regexp.MustCompile(`^/proc/sys/vm/dirty_ratio$`), pctVal, nil},
+		{regexp.MustCompile(`^/proc/sys/vm/page-cluster$`), regexp.MustCompile(`^[0-9]$`), nil},
+		{regexp.MustCompile(`^/proc/sys/vm/max_map_count$`), bigVal, nil},
+		{regexp.MustCompile(`^/proc/sys/vm/compaction_proactiveness$`), pctVal, nil},
+		{regexp.MustCompile(`^/proc/sys/kernel/sched_autogroup_enabled$`), flagVal, nil},
+		{regexp.MustCompile(`^/proc/sys/kernel/split_lock_mitigate$`), flagVal, nil},
+		{regexp.MustCompile(`^/sys/kernel/mm/transparent_hugepage/enabled$`), tokenVal, ActiveChoice},
+		{regexp.MustCompile(`^/sys/module/pcie_aspm/parameters/policy$`), tokenVal, ActiveChoice},
+		{regexp.MustCompile(`^/sys/module/usbcore/parameters/autosuspend$`), usbVal, nil},
+		{regexp.MustCompile(`^/sys/class/drm/card[0-9]{1,2}/device/power_dpm_force_performance_level$`), tokenVal, nil},
+		{regexp.MustCompile(`^/sys/block/(nvme[0-9]{1,3}n[0-9]{1,3}|sd[a-z]{1,3}|vd[a-z]{1,3}|mmcblk[0-9]{1,3})/queue/read_ahead_kb$`), smallVal, nil},
+		{regexp.MustCompile(`^/sys/block/(nvme[0-9]{1,3}n[0-9]{1,3}|sd[a-z]{1,3}|vd[a-z]{1,3}|mmcblk[0-9]{1,3})/queue/scheduler$`), tokenVal, ActiveChoice},
+	}
 )
+
+// ActiveChoice extracts the active entry from a "none [mq-deadline] kyber"
+// style listing; a plain value is returned trimmed.
+func ActiveChoice(s string) string {
+	s = strings.TrimSpace(s)
+	if i := strings.IndexByte(s, '['); i >= 0 {
+		if j := strings.IndexByte(s[i:], ']'); j > 1 {
+			return s[i+1 : i+j]
+		}
+	}
+	return s
+}
+
+func ruleFor(path string) (rule, bool) {
+	for _, r := range rules {
+		if r.path.MatchString(path) {
+			return r, true
+		}
+	}
+	return rule{}, false
+}
 
 // Validate is the allowlist. Anything not explicitly permitted is refused.
 func Validate(a Action) error {
 	switch a.Op {
 	case OpWriteSysfs:
-		if !cpufreqRe.MatchString(a.Path) {
-			return fmt.Errorf("%w: %q is not an allowlisted sysfs attribute", ErrDenied, a.Path)
+		r, ok := ruleFor(a.Path)
+		if !ok {
+			return fmt.Errorf("%w: %q is not an allowlisted kernel attribute", ErrDenied, a.Path)
 		}
-		if !sysfsValRe.MatchString(a.Value) {
-			return fmt.Errorf("%w: invalid value %q", ErrDenied, a.Value)
+		if !r.val.MatchString(a.Value) {
+			return fmt.Errorf("%w: invalid value %q for %s", ErrDenied, a.Value, a.Path)
 		}
 		return nil
 	}
@@ -80,12 +150,20 @@ func (d Direct) Do(_ context.Context, a Action) (Result, error) {
 	if _, err := d.FS.Stat(a.Path); err != nil {
 		return Result{}, fmt.Errorf("%s does not exist on this system", a.Path)
 	}
+	r, _ := ruleFor(a.Path) // present: Validate passed
+	norm := func(s string) string {
+		if r.norm != nil {
+			return r.norm(s)
+		}
+		return s
+	}
 	prev, _ := platform.ReadTrim(d.FS, a.Path)
+	prev = norm(prev)
 	if err := d.FS.WriteFile(a.Path, []byte(a.Value+"\n"), 0o644); err != nil {
 		return Result{Previous: prev}, fmt.Errorf("write %s: %w", a.Path, err)
 	}
-	if now, ok := platform.ReadTrim(d.FS, a.Path); ok && now != a.Value {
-		return Result{Previous: prev}, fmt.Errorf("kernel rejected %q for %s (value stayed %q)", a.Value, a.Path, now)
+	if now, ok := platform.ReadTrim(d.FS, a.Path); ok && norm(now) != a.Value {
+		return Result{Previous: prev}, fmt.Errorf("kernel rejected %q for %s (value stayed %q)", a.Value, a.Path, norm(now))
 	}
 	return Result{Previous: prev}, nil
 }

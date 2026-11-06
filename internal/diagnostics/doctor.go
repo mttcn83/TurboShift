@@ -90,7 +90,8 @@ func Diagnose(r detect.Report) []Finding {
 	c := r.CPU
 	if c.TurboEnabled != nil && !*c.TurboEnabled {
 		add(Finding{ID: "cpu.turbo-off", Area: "CPU", Sev: SevWarn, Title: "CPU turbo/boost is disabled",
-			Detail: "The CPU cannot exceed its base clock, which can cost a lot of single-thread speed. This is a firmware or kernel setting (BIOS, intel_pstate no_turbo, cpufreq boost) — TurboShift does not change it automatically."})
+			Detail: "The CPU cannot exceed its base clock, which can cost a lot of single-thread speed. This is a firmware or kernel setting (BIOS, intel_pstate no_turbo, cpufreq boost). If it is only the kernel switch, the Optimizer's CPU turbo / boost item can turn it back on (never automatically); a BIOS setting has to be changed in the BIOS.",
+			Fix:    &Fix{"cpu.boost", map[string]string{"boost": "on"}}})
 	}
 	switch {
 	case c.ThrottleSeconds != nil && r.System.UptimeSec > 600:

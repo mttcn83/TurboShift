@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.2.0
+
+Catalogue grows from 3 to **26** optimizations, all through the same preview, restore point, verify and undo machinery.
+
+- **CPU & power:** `cpu.epp` (energy preference), `cpu.boost` (turbo/boost), `platform.profile` (firmware profile), `cpu.autogroup`, `pcie.aspm` (PCIe link power saving), `usb.autosuspend`.
+- **Network:** `net.dns` (resolver choice via NetworkManager, with checkpoint), `net.tcp-cc` (BBR/CUBIC/...), `net.qdisc` (fq_codel/cake), `net.tcp-fastopen`, `net.tcp-idle`, `net.budget`.
+- **Memory:** `mem.swappiness`, `mem.page-cluster`, `mem.vfs-cache`, `mem.compaction`, `mem.thp`.
+- **Storage:** `io.scheduler`, `io.readahead`, `mem.dirty` (write-back buffering).
+- **Gaming:** `game.max-map-count`, `game.split-lock`, `gpu.amd-level`.
+- Each is gated on hardware support and on no power manager owning the setting, previewed with exact before/after values, and restored exactly (including custom starting values). Only live evidence produces recommendations; the rest are offered, never pushed.
+- Root helper allowlist widened from one sysfs pattern to 25 anchored path+value patterns (still no command execution, no wildcards across `/`); a rejected batch writes nothing.
+- The Doctor's "CPU boost is disabled" finding now links to `cpu.boost`.
+- 46 new end-to-end tweak tests (apply, verify, exact restore, unsupported-hardware refusal, power-manager deference, one prompt per change, DNS journal-tampering).
+
 ## 0.1.1
 
 Bug-fix release found by a second audit pass (static analysis, parser fuzzing, code review).

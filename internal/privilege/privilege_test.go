@@ -294,3 +294,73 @@ func TestDoAllContinuesAfterOneFailure(t *testing.T) {
 		t.Error("one failure must not stop the remaining writes (restores are best-effort)")
 	}
 }
+
+// ---- the wider allowlist ----
+
+func TestAllowlistCoversExactlyTheKnownKernelAttributes(t *testing.T) {
+	cpu := "/sys/devices/system/cpu/"
+	ok := []Action{
+		{OpWriteSysfs, cpu + "cpu0/cpufreq/energy_performance_preference", "balance_performance"},
+		{OpWriteSysfs, cpu + "intel_pstate/no_turbo", "0"},
+		{OpWriteSysfs, cpu + "cpufreq/boost", "1"},
+		{OpWriteSysfs, "/sys/firmware/acpi/platform_profile", "low-power"},
+		{OpWriteSysfs, "/proc/sys/net/ipv4/tcp_congestion_control", "bbr"},
+		{OpWriteSysfs, "/proc/sys/vm/swappiness", "0"},
+		{OpWriteSysfs, "/proc/sys/vm/swappiness", "180"},
+		{OpWriteSysfs, "/proc/sys/vm/swappiness", "200"},
+		{OpWriteSysfs, "/sys/block/nvme0n1/queue/scheduler", "none"},
+		{OpWriteSysfs, "/sys/block/sda/queue/scheduler", "mq-deadline"},
+		{OpWriteSysfs, "/sys/block/vdb/queue/scheduler", "bfq"},
+		{OpWriteSysfs, "/sys/block/mmcblk0/queue/scheduler", "kyber"},
+	}
+	for _, a := range ok {
+		if err := Validate(a); err != nil {
+			t.Errorf("%+v: %v", a, err)
+		}
+	}
+	bad := []Action{
+		{OpWriteSysfs, cpu + "intel_pstate/no_turbo", "2"},
+		{OpWriteSysfs, cpu + "intel_pstate/no_turbo", "01"},
+		{OpWriteSysfs, cpu + "intel_pstate/max_perf_pct", "100"},
+		{OpWriteSysfs, "/proc/sys/vm/swappiness", "201"},
+		{OpWriteSysfs, "/proc/sys/vm/swappiness", "-1"},
+		{OpWriteSysfs, "/proc/sys/vm/swappiness", "1e2"},
+		{OpWriteSysfs, "/proc/sys/vm/overcommit_memory", "1"},
+		{OpWriteSysfs, "/proc/sys/kernel/core_pattern", "x"},
+		{OpWriteSysfs, "/proc/sys/net/ipv4/ip_forward", "1"},
+		{OpWriteSysfs, "/proc/sys/net/ipv4/tcp_congestion_control", "bbr cubic"},
+		{OpWriteSysfs, "/sys/block/sda/queue/scheduler", "none [x]"},
+		{OpWriteSysfs, "/sys/block/sda/queue/nr_requests", "1"},
+		{OpWriteSysfs, "/sys/block/sda/../sdb/queue/scheduler", "none"},
+		{OpWriteSysfs, "/sys/block/loop0/queue/scheduler", "none"},
+		{OpWriteSysfs, "/sys/block/sda1/queue/scheduler", "none"},
+		{OpWriteSysfs, "/sys/block/dm-0/queue/scheduler", "none"},
+		{OpWriteSysfs, "/sys/firmware/acpi/platform_profile_choices", "x"},
+		{OpWriteSysfs, "/sys/class/power_supply/BAT0/charge_control_end_threshold", "80"},
+	}
+	for _, a := range bad {
+		if err := Validate(a); !errors.Is(err, ErrDenied) {
+			t.Errorf("%+v should be denied, got %v", a, err)
+		}
+	}
+}
+
+func TestActiveChoiceAndSchedulerReadback(t *testing.T) {
+	for in, want := range map[string]string{
+		"none [mq-deadline] kyber bfq": "mq-deadline",
+		"[none] mq-deadline":           "none",
+		"mq-deadline\n":                "mq-deadline",
+		"":                             "",
+		"[]":                           "[]",
+	} {
+		if got := ActiveChoice(in); got != want {
+			t.Errorf("ActiveChoice(%q) = %q, want %q", in, got, want)
+		}
+	}
+	const sched = "/sys/block/nvme0n1/queue/scheduler"
+	fs := platform.NewMemFS().Set(sched, "[none] mq-deadline kyber\n")
+	res, err := Direct{FS: fs}.Do(context.Background(), Action{OpWriteSysfs, sched, "kyber"})
+	if err != nil || res.Previous != "none" {
+		t.Fatalf("res=%+v err=%v", res, err)
+	}
+}

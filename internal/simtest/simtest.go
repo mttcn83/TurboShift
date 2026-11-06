@@ -34,6 +34,8 @@ type Machine struct {
 	WifiUUID       string
 	Iface          string
 	NMPowersave    string // nm enum name
+	DNS            string // ipv4.dns, comma separated ("" = automatic)
+	IgnoreAutoDNS  string // ipv4.ignore-auto-dns: "yes" | "no"
 	Radio          string // "on" | "off" as iw reports
 	ReapplyApplies bool   // does `device reapply` push the setting to the radio?
 
@@ -54,7 +56,7 @@ func New() *Machine {
 		PPD:   true, PPDProfile: "balanced", PPDProfiles: []string{"performance", "balanced", "power-saver"},
 		OtherMgrs: map[string]bool{},
 		NM:        true, WifiUUID: "049d7dd4-b361-44b1-8e51-70ac8f2e2a81", Iface: "wlp108s0",
-		NMPowersave: "default", Radio: "on", ReapplyApplies: true,
+		NMPowersave: "default", Radio: "on", ReapplyApplies: true, IgnoreAutoDNS: "no",
 		Fail: map[string]error{},
 	}
 	f := m.FS
@@ -170,13 +172,27 @@ func (m *Machine) Run(_ context.Context, name string, args ...string) (platform.
 
 	case "nmcli":
 		switch {
+		case args[0] == "-t" && len(args) > 4 && args[2] == "UUID,DEVICE" && args[4] == "show": // connection show --active
+			if m.WifiUUID == "" {
+				return ok("")
+			}
+			return ok(m.WifiUUID + ":" + m.Iface + "\n")
 		case args[0] == "-t" && len(args) > 4 && args[4] == "show": // connection show --active
 			if m.WifiUUID == "" {
 				return ok("1dc29a41-11d4-4efd-8199-9f35c8aeb581:loopback:lo\n")
 			}
 			return ok(m.WifiUUID + ":802-11-wireless:" + m.Iface + "\n1dc29a41-11d4-4efd-8199-9f35c8aeb581:loopback:lo\n")
+		case args[0] == "-g" && args[1] == "ipv4.dns,ipv4.ignore-auto-dns":
+			return ok(strings.ReplaceAll(m.DNS, ",", ", ") + "\n" + m.IgnoreAutoDNS + "\n")
 		case args[0] == "-g": // -g 802-11-wireless.powersave connection show UUID
 			return ok(m.NMPowersave + "\n")
+		case args[0] == "connection" && args[1] == "modify" && args[3] == "ipv4.dns":
+			if r, e, f := fail("nm-modify"); f {
+				return r, e
+			}
+			m.DNS = strings.Join(strings.Fields(args[4]), ",")
+			m.IgnoreAutoDNS = args[6]
+			return ok("")
 		case args[0] == "connection" && args[1] == "modify":
 			if r, e, f := fail("nm-modify"); f {
 				return r, e

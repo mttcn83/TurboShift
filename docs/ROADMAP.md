@@ -4,11 +4,12 @@ Nothing below exists today; the app does not pretend otherwise. Each item must c
 
 ## Optimizations (candidates)
 
-- Memory: zram sizing and swappiness guidance (with PSI evidence), `vm.max_map_count` for specific games.
-- Storage: I/O scheduler per device type, `noatime` advice (read-only advice first).
-- Network: DNS resolver choice with measured lookup times, congestion control (BBR) with before/after Network Doctor runs.
-- GPU: NVIDIA/AMD power management hints, hybrid-graphics offload checks.
-- CPU: EPP and boost control through the existing power manager when one owns it.
+The first 26 are shipped (see the README). Still candidates:
+
+- GPU: NVIDIA power-management hints (needs `nvidia-smi`/NVML writes, a separate privilege story), hybrid-graphics offload checks.
+- Per-game process priority and pausing user-selected background jobs while a game runs.
+- zram sizing guidance (with PSI evidence) and `noatime` advice (read-only first).
+- Persisting a chosen setting across reboots (today every kernel tweak is deliberately runtime-only).
 - A polkit action file with a clear prompt text for the privileged helper.
 
 ## Product

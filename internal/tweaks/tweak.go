@@ -192,6 +192,12 @@ type Guarded interface {
 	BeginGuard(ctx context.Context, env Env, p Plan) (Guard, error)
 }
 
+// Summarizer is an optional human-readable one-liner for a state, for tweaks
+// whose state is several settings that read badly when simply joined.
+type Summarizer interface {
+	Summary(State) string
+}
+
 // Checker is an optional extra check of the *effective* result, for tweaks
 // whose stored setting can differ from what the hardware is really doing.
 type Checker interface {
@@ -264,9 +270,37 @@ func (r *Registry) All() []Tweak {
 // ideas are documented in docs/ROADMAP.md instead of appearing as dead controls.
 func Default() *Registry {
 	r := NewRegistry()
+	// CPU & power
 	r.Register(PowerProfile{})
-	r.Register(WifiPowerSave{})
 	r.Register(CPUPolicy{})
+	r.Register(CPUEnergyPreference())
+	r.Register(CPUBoost())
+	r.Register(PlatformProfile())
+	r.Register(SchedAutogroup())
+	r.Register(PCIeASPM())
+	r.Register(USBAutosuspend())
+	// Network
+	r.Register(WifiPowerSave{})
+	r.Register(DNSResolver{})
+	r.Register(TCPCongestion())
+	r.Register(DefaultQdisc())
+	r.Register(TCPFastOpen())
+	r.Register(TCPSlowStartAfterIdle())
+	r.Register(NetdevBudget())
+	// Memory
+	r.Register(Swappiness())
+	r.Register(PageCluster())
+	r.Register(VFSCachePressure())
+	r.Register(CompactionProactiveness())
+	r.Register(TransparentHugepages())
+	// Storage
+	r.Register(IOScheduler())
+	r.Register(ReadAhead())
+	r.Register(DirtyWriteback())
+	// Gaming
+	r.Register(MaxMapCount())
+	r.Register(SplitLockMitigate())
+	r.Register(AMDGPUPerformanceLevel())
 	return r
 }
 

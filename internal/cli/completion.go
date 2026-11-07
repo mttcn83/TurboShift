@@ -109,7 +109,7 @@ _turbo() {
             elif [[ ${COMP_WORDS[2]} == show ]]; then
                 COMPREPLY=( $(compgen -W "$(turbo __complete tweaks 2>/dev/null)" -- "$cur") )
             else
-                COMPREPLY=( $(compgen -W "--all --json" -- "$cur") )
+                COMPREPLY=( $(compgen -W "--all --json --suggested --tier --max-risk --category --no-password" -- "$cur") )
             fi ;;
         apply)
             COMPREPLY=( $(compgen -W "$(turbo __complete tweak-values 2>/dev/null) --dry-run --yes" -- "$cur") )
@@ -174,6 +174,11 @@ func fishCompletion() string {
 	}
 	b.WriteString("complete -c turbo -n '__fish_seen_subcommand_from tweaks; and contains -- show (commandline -opc)' -a '(turbo __complete tweaks 2>/dev/null)'\n")
 	b.WriteString("complete -c turbo -n '__fish_seen_subcommand_from tweaks; and contains -- list (commandline -opc)' -l all -d 'include tweaks this PC cannot do'\n")
+	b.WriteString("complete -c turbo -n '__fish_seen_subcommand_from tweaks; and contains -- list (commandline -opc)' -l suggested -d 'only what this PC readings recommend now'\n")
+	b.WriteString("complete -c turbo -n '__fish_seen_subcommand_from tweaks; and contains -- list (commandline -opc)' -l tier -x -a 'recommended situational advanced' -d 'only this tier'\n")
+	b.WriteString("complete -c turbo -n '__fish_seen_subcommand_from tweaks; and contains -- list (commandline -opc)' -l max-risk -x -a 'low medium high' -d 'only this risk or lower'\n")
+	b.WriteString("complete -c turbo -n '__fish_seen_subcommand_from tweaks; and contains -- list (commandline -opc)' -l category -x -d 'only this category'\n")
+	b.WriteString("complete -c turbo -n '__fish_seen_subcommand_from tweaks; and contains -- list (commandline -opc)' -l no-password -d 'only changes that need no administrator password'\n")
 	b.WriteString("complete -c turbo -n '__fish_seen_subcommand_from apply' -a '(turbo __complete tweak-values 2>/dev/null)' -d 'optimization'\n")
 	b.WriteString("complete -c turbo -n '__fish_seen_subcommand_from apply' -l dry-run -d 'show the plan, change nothing'\n")
 	b.WriteString("complete -c turbo -n '__fish_seen_subcommand_from apply preset undo' -l yes -d 'do not ask for confirmation'\n")

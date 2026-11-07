@@ -18,7 +18,7 @@ Anything unreadable is reported as unknown with a reason; it is never invented.
 
 ## Which tweaks need what
 
-Each tweak appears as *available* only when its kernel file exists and nothing else owns it, so on any machine a large part of the 54 will correctly read "not available":
+Each tweak appears as *available* only when its kernel file exists and nothing else owns it, so on any machine a large part of the 57 will correctly read "not available":
 
 | Needs | Tweaks |
 | --- | --- |
@@ -29,6 +29,8 @@ Each tweak appears as *available* only when its kernel file exists and nothing e
 | Swap or zram configured | `mem.swappiness`, `mem.page-cluster` |
 | AMD GPU with amdgpu | `gpu.amd-level` |
 | Linux 6.2+ | `game.split-lock` |
+| PipeWire (`pw-metadata`) | `audio.quantum` |
+| Hyprland with the classic `hyprland.conf` (not the Lua config) | the `desktop.hypr-*` tweaks, including `desktop.hypr-vrr` |
 | Any Linux | the remaining sysctl/sysfs tweaks |
 
 ## Optional tools

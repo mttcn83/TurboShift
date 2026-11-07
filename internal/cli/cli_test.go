@@ -416,6 +416,30 @@ func TestTweaksListHidesUnavailableUnlessAsked(t *testing.T) {
 	}
 }
 
+func TestTweaksListFilters(t *testing.T) {
+	r := newRig(t)
+	text := func(args ...string) string {
+		_, out, _ := r.run(append([]string{"tweaks", "list", "--all"}, args...)...)
+		return out
+	}
+	all := text()
+	rec := text("--tier", "recommended")
+	if !strings.Contains(rec, "power.profile") || strings.Contains(rec, "mem.dirty") || len(rec) >= len(all) {
+		t.Errorf("--tier recommended should keep recommended settings only:\n%s", rec)
+	}
+	if out := text("watchers"); !strings.Contains(out, "sys.watchers") || strings.Contains(out, "mem.dirty") {
+		t.Errorf("search words should narrow the list:\n%s", out)
+	}
+	if out := text("--max-risk", "low"); strings.Contains(out, "mem.min-free") {
+		t.Errorf("--max-risk low must hide medium-risk settings:\n%s", out)
+	}
+	for _, bad := range [][]string{{"--tier", "bogus"}, {"--max-risk", "extreme"}, {"--category", "nonsense"}} {
+		if code, _, _ := r.run(append([]string{"tweaks", "list"}, bad...)...); code != ExitUsage {
+			t.Errorf("%v should be a usage error, got %d", bad, code)
+		}
+	}
+}
+
 func TestTweaksShowNeverPrintsGoMaps(t *testing.T) {
 	r := newRig(t)
 	r.mach.FS.Set("/proc/sys/net/ipv4/tcp_ecn", "2\n")

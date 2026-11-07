@@ -19,7 +19,9 @@ var ppdOptions = []Option{
 	{"power-saver", "Power saver", "Lowest power; can noticeably limit performance."},
 }
 
-func (PowerProfile) Meta() Meta {
+func (PowerProfile) Meta() Meta { return plained(PowerProfile{}.rawMeta()) }
+
+func (PowerProfile) rawMeta() Meta {
 	return Meta{
 		ID:       "power.profile",
 		Name:     "Performance / balanced / power-saver mode",
@@ -44,7 +46,7 @@ func (p PowerProfile) Assess(ctx context.Context, env Env) Assessment {
 	if err != nil {
 		return Assessment{Reason: "power-profiles-daemon is not responding: " + err.Error()}
 	}
-	a := Assessment{Available: true, Current: cur, Options: p.options(env)}
+	a := Assessment{Available: true, Current: cur, Options: plainOpts("power.profile", p.options(env))}
 	if on := env.Report.Power.OnAC; on != nil && *on && cur["profile"] == "power-saver" {
 		a.Recommend = &Recommendation{
 			Params: map[string]string{"profile": "balanced"},

@@ -34,7 +34,9 @@ var dnsOptions = []Option{
 	{"google", "Google 8.8.8.8", "Public resolver run by Google. Your lookups go to Google."},
 }
 
-func (DNSResolver) Meta() Meta {
+func (DNSResolver) Meta() Meta { return plained(DNSResolver{}.rawMeta()) }
+
+func (DNSResolver) rawMeta() Meta {
 	return Meta{
 		ID: "net.dns", Name: "Faster website and game-server lookups (DNS)",
 		Summary:  "Use a different DNS service on this connection if your router's or ISP's is slow.",
@@ -79,7 +81,7 @@ func (d DNSResolver) Assess(ctx context.Context, env Env) Assessment {
 	if err != nil {
 		return Assessment{Reason: "Could not read the connection's settings: " + err.Error()}
 	}
-	return Assessment{Available: true, Current: cur, Options: dnsOptions}
+	return Assessment{Available: true, Current: cur, Options: plainOpts("net.dns", dnsOptions)}
 }
 
 // normalizeDNS turns nmcli's "1.1.1.1, 1.0.0.1" / "1.1.1.1,1.0.0.1" / "" into

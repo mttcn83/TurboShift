@@ -27,8 +27,13 @@ func moreFileCases() []fileCase {
 	return []fileCase{
 		one("net.notsent-lowat", "value", "131072", neti+"tcp_notsent_lowat", "4294967295", "131072", nil),
 		{id: "net.buffers", param: "size", value: "fast",
-			seed: map[string]string{netc + "rmem_max": "212992\n", netc + "wmem_max": "212992\n"},
-			want: map[string]string{netc + "rmem_max": "16777216\n", netc + "wmem_max": "16777216\n"}, wantActions: 2},
+			seed: map[string]string{netc + "rmem_max": "212992\n", netc + "wmem_max": "212992\n",
+				neti + "tcp_rmem": "4096 131072 6291456\n", neti + "tcp_wmem": "4096 16384 4194304\n"},
+			want: map[string]string{netc + "rmem_max": "16777216\n", netc + "wmem_max": "16777216\n",
+				neti + "tcp_rmem": "4096 131072 16777216\n", neti + "tcp_wmem": "4096 16384 16777216\n"}, wantActions: 4},
+		{id: "sys.watchers", param: "limit", value: "more",
+			seed: map[string]string{"/proc/sys/fs/inotify/max_user_watches": "8192\n", "/proc/sys/fs/inotify/max_user_instances": "128\n"},
+			want: map[string]string{"/proc/sys/fs/inotify/max_user_watches": "524288\n", "/proc/sys/fs/inotify/max_user_instances": "512\n"}, wantActions: 2},
 		one("net.backlog", "value", "5000", netc+"netdev_max_backlog", "1000", "5000", nil),
 		one("net.mtu-probing", "value", "1", neti+"tcp_mtu_probing", "0", "1", nil),
 		one("net.ecn", "value", "1", neti+"tcp_ecn", "2", "1", nil),
@@ -77,7 +82,7 @@ func moreFileCases() []fileCase {
 func hyprMachine(m *simtest.Machine) {
 	m.Tools["hyprctl"] = true
 	m.Hypr = map[string]int{"animations:enabled": 1, "decoration:blur:enabled": 1, "decoration:shadow:enabled": 0,
-		"general:allow_tearing": 0, "render:direct_scanout": 0}
+		"general:allow_tearing": 0, "render:direct_scanout": 0, "misc:vrr": 0}
 }
 
 func TestHyprlandEffectsApplyVerifyAndRestorePerKey(t *testing.T) {
@@ -128,6 +133,84 @@ func TestHyprlandTweaksSimpleOptionsAndFailure(t *testing.T) {
 	}
 }
 
+func TestHyprlandVRRHasThreeModes(t *testing.T) {
+	r := newRig(t, hyprMachine, func(m *simtest.Machine) {})
+	snap, err := r.eng.Apply(ctx, []Request{{"desktop.hypr-vrr", map[string]string{"vrr": "fullscreen"}}}, "t", nil)
+	if err != nil || r.m.Hypr["misc:vrr"] != 2 {
+		t.Fatalf("fullscreen: %v vrr=%d (want 2)", err, r.m.Hypr["misc:vrr"])
+	}
+	if _, err := r.eng.Restore(ctx, snap.ID, RestoreOptions{}, nil); err != nil || r.m.Hypr["misc:vrr"] != 0 {
+		t.Fatalf("restore: %v vrr=%d", err, r.m.Hypr["misc:vrr"])
+	}
+	if _, err := r.eng.Apply(ctx, []Request{{"desktop.hypr-vrr", map[string]string{"vrr": "3"}}}, "t", nil); err == nil {
+		t.Error("an unknown mode must be refused")
+	}
+}
+
+func TestPipeWireQuantumAppliesRestoresAndRefusesGarbage(t *testing.T) {
+	pw := func(m *simtest.Machine) { m.Tools["pw-metadata"] = true; m.PWQuantum = "0" }
+	r := newRig(t, pw)
+	snap, err := r.eng.Apply(ctx, []Request{{"audio.quantum", map[string]string{"frames": "512"}}}, "t", nil)
+	if err != nil || r.m.PWQuantum != "512" {
+		t.Fatalf("apply: %v quantum=%q", err, r.m.PWQuantum)
+	}
+	if len(r.priv.Actions) != 0 {
+		t.Errorf("a user-level tweak asked for administrator rights: %+v", r.priv.Actions)
+	}
+	if _, err := r.eng.Restore(ctx, snap.ID, RestoreOptions{}, nil); err != nil || r.m.PWQuantum != "0" {
+		t.Fatalf("restore: %v quantum=%q", err, r.m.PWQuantum)
+	}
+	if _, err := r.eng.Apply(ctx, []Request{{"audio.quantum", map[string]string{"frames": "512; rm -rf /"}}}, "t", nil); err == nil {
+		t.Error("a non-numeric value must be refused")
+	}
+	// Not installed / not running: unavailable, with a reason.
+	for _, mut := range []func(*simtest.Machine){func(m *simtest.Machine) {}, func(m *simtest.Machine) { m.Tools["pw-metadata"] = true }} {
+		rr := newRig(t, mut)
+		tw, _ := rr.eng.Reg.Get("audio.quantum")
+		if a := tw.Assess(ctx, rr.eng.Env); a.Available || a.Reason == "" {
+			t.Errorf("audio.quantum must be unavailable without a running PipeWire: %+v", a)
+		}
+	}
+}
+
+// Real Hyprland prints on/off options as {"bool": true}. A reader that only
+// knew "int" reported every such tweak as unavailable on a current Hyprland.
+func TestHyprlandBooleanOptionsAreReadAsOnOff(t *testing.T) {
+	r := newRig(t, hyprMachine)
+	for id, want := range map[string]string{"desktop.hypr-effects": "animations:enabled", "desktop.hypr-tearing": "general:allow_tearing"} {
+		tw, _ := r.eng.Reg.Get(id)
+		a := tw.Assess(ctx, r.eng.Env)
+		if !a.Available {
+			t.Fatalf("%s should be available: %s", id, a.Reason)
+		}
+		if _, ok := a.Current[want]; !ok {
+			t.Errorf("%s: state %v lacks %s", id, a.Current, want)
+		}
+	}
+}
+
+// A Lua-configured Hyprland (hyprland.lua) refuses `hyprctl keyword`: the
+// switches must say so up front instead of offering something that fails.
+func TestLuaConfiguredHyprlandIsReportedHonestly(t *testing.T) {
+	r := newRig(t, hyprMachine, func(m *simtest.Machine) {
+		m.HyprLua = true
+		m.FS.Set("/home/test/.config/hypr/hyprland.lua", "-- config\n")
+	})
+	r.eng.Env.Home = "/home/test"
+	for _, id := range []string{"desktop.hypr-effects", "desktop.hypr-tearing", "desktop.hypr-direct-scanout", "desktop.hypr-vrr"} {
+		tw, _ := r.eng.Reg.Get(id)
+		if a := tw.Assess(ctx, r.eng.Env); a.Available || !strings.Contains(a.Reason, "Lua") {
+			t.Errorf("%s must be unavailable with a Lua explanation: %+v", id, a)
+		}
+	}
+	// Without the config file to recognise, a refusing Hyprland still fails safely.
+	r2 := newRig(t, hyprMachine, func(m *simtest.Machine) { m.HyprLua = true })
+	_, err := r2.eng.Apply(ctx, []Request{{"desktop.hypr-vrr", map[string]string{"vrr": "on"}}}, "t", nil)
+	if err == nil || !strings.Contains(err.Error(), "does not accept runtime keywords") {
+		t.Errorf("want an explanatory failure, got %v", err)
+	}
+}
+
 func TestDesktopTweaksUnavailableWithoutTheDesktop(t *testing.T) {
 	r := newRig(t) // no hyprctl, no gsettings
 	for _, id := range []string{"desktop.hypr-effects", "desktop.hypr-tearing", "desktop.hypr-direct-scanout", "desktop.gnome-animations"} {
@@ -160,7 +243,8 @@ func TestGnomeAnimationsRoundTrip(t *testing.T) {
 
 func TestEveryTweakHasTestsAndPlainMetadata(t *testing.T) {
 	covered := map[string]bool{"power.profile": true, "cpu.governor": true, "net.wifi-powersave": true, "net.dns": true,
-		"desktop.hypr-effects": true, "desktop.hypr-tearing": true, "desktop.hypr-direct-scanout": true, "desktop.gnome-animations": true}
+		"desktop.hypr-effects": true, "desktop.hypr-tearing": true, "desktop.hypr-direct-scanout": true, "desktop.gnome-animations": true,
+		"desktop.hypr-vrr": true, "audio.quantum": true}
 	for _, c := range fileCases() {
 		covered[c.id] = true
 	}

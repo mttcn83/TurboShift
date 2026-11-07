@@ -279,6 +279,12 @@ func (m *Model) onPreview(msg previewMsg) {
 			needAuth = true
 			md.add("dim", "Needs administrator approval for this step only.", 2)
 		}
+		if mt.Tradeoff != "" {
+			md.add("warn", m.gl.Warn+" Cost: "+mt.Tradeoff, 2)
+		}
+		if mt.Reboot {
+			md.add("warn", m.gl.Warn+" Needs a restart of your computer to take effect.", 2)
+		}
 		md.add("dim", "Lasts: "+string(mt.Scope)+".  Measure it: "+mt.Evidence, 2)
 		md.gap()
 	}
@@ -370,6 +376,11 @@ func (m *Model) onApplyDone(msg applyDoneMsg) tea.Cmd {
 		md.title = "Done"
 		md.snapID = msg.snap.ID
 		md.add("ok", m.gl.Check+" Applied and verified.")
+		if names := m.needRestart(msg.snap); len(names) > 0 {
+			md.title = "Restart needed"
+			md.gap()
+			md.add("warn", m.gl.Warn+" Restart your computer for these to take effect: "+strings.Join(names, ", ")+".")
+		}
 		md.gap()
 		for _, it := range msg.snap.Items {
 			md.add("bold", it.Name)
@@ -406,6 +417,18 @@ func (m *Model) onApplyDone(msg applyDoneMsg) tea.Cmd {
 	m.modal = md
 	m.opt.checked = map[string]bool{}
 	return m.startScan(false)
+}
+
+// needRestart names the tweaks in a restore point that only take effect after
+// the computer is restarted. The pop-up appears only when this is non-empty.
+func (m *Model) needRestart(s *snapshot.Snapshot) []string {
+	var names []string
+	for _, it := range s.Items {
+		if t, ok := m.app.Reg.Get(it.TweakID); ok && t.Meta().Reboot {
+			names = append(names, t.Meta().Name)
+		}
+	}
+	return names
 }
 
 // ---- restore / recover ----

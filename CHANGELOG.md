@@ -1,5 +1,45 @@
 # Changelog
 
+## 1.1.0
+
+Honest risks, plain wording, an Apply button, a filterable catalogue and three new optimizations (57 in total). No breaking changes; the `--json` documents and IDs only gain fields.
+
+**Honest about risk**
+
+- Every optimization's trade-off was re-read against what it really does. Settings that can lose unsaved data on a power cut (`mem.dirty`, `mem.writeback-timing`), starve the system of memory (`mem.min-free`) or weaken a safety net now say so, and their risk is Medium instead of Low. A test fails if a setting that can lose data claims to be harmless.
+- The tier label now means something. *Recommended* is only low-risk settings, and **Optimize My PC** applies only what is both Recommended and suggested by this PC's own readings (for example the Wi-Fi power-saving switch when the card is actually dozing). Everything else stays an offer.
+- `game.split-lock` left the Gaming preset (it is a security-relevant switch, not a speed-up), and the preset descriptions no longer imply a gain. Nothing here promises a speed-up; measure with Benchmark Lab.
+- Restoring a restore point now writes back only the settings that really differ from what the point recorded, so a restore can no longer touch a setting the change never reached.
+
+**Plain wording and Apply**
+
+- Every description and every option is rewritten in everyday words ("Let editors and sync tools watch more files"). The original technical text is still there under **Technical details** in the app and `turbo tweaks show`.
+- New **Apply** button (key `a`): applies the setting under the cursor, or everything you ticked. It always previews first.
+- A *Restart needed* line appears in the description, the preview and the result **only** for settings that need a restart to take effect; for the others nothing is shown. (Today every kernel setting is runtime-only, so none shows it yet; the plumbing and tests are there for ones that do.)
+
+**Filtering**
+
+- Optimizer: filter by category (`c`), tier (`t`), view all / **suggested for this PC** (`v`) and **no password needed** (`w`), on top of search (`/`). `Esc` clears them; the chips above the list are clickable and the header says what is being shown.
+- CLI: `turbo tweaks list [--suggested] [--tier T] [--max-risk R] [--category C] [--no-password] [words...]`, with shell completion.
+
+**New and improved optimizations**
+
+- `sys.watchers` (Recommended): raise the inotify watch limit. The low default is a classic cause of "ENOSPC: System limit for number of file watchers reached" in editors, file sync and dev servers.
+- `audio.quantum`: set PipeWire's buffer size to stop crackling (larger) or lower latency (smaller). Read and written with `pw-metadata`.
+- `desktop.hypr-vrr`: adaptive sync on Hyprland (classic config only).
+- `net.buffers` now raises the TCP autotuning ceilings (`tcp_rmem`/`tcp_wmem`) too; before, it changed only limits that normal TCP traffic ignores.
+- `cpu.governor` is suggested only where it really matters (no power manager, a power-saving governor on AC); `cpu.epp`, `cpu.boost`, `mem.page-cluster`, `game.max-map-count` and `net.qdisc` were promoted to Recommended on evidence that they are low-risk and widely useful.
+- The privileged helper allowlist and numeric ceilings cover the new settings (space-separated triples included), fuzzed.
+- The README catalogue is now generated from the registry and a test fails if it is out of date.
+
+**Fixed**
+
+- Hyprland 0.57 prints boolean options as `{"bool": ...}`; the tweaks misread that. A machine using `hyprland.lua` rejects `hyprctl keyword`; the tweaks now report "unavailable" with that reason instead of failing at apply time.
+
+**Not verified**
+
+- No gain is claimed for any setting. Real writes of `net.core.*`, inotify, `hypr-vrr` and `audio.quantum` on live hardware, and the polkit prompt, were not exercised by the automated tests (the real-kernel test runs inside a network namespace that refuses some of them; those are covered by simulation).
+
 ## 1.0.0
 
 First stable release. The 54 optimizations, presets and one-key goals from 0.3.0 are unchanged; 1.0 is about trust: a real-kernel test, a hardened helper, a stable contract and the bugs that testing found.

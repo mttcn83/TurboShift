@@ -16,7 +16,8 @@ if ! unshare -Urn true 2>/dev/null; then
 	exit 0
 fi
 
-host_before=$(cat /proc/sys/net/ipv4/tcp_ecn /proc/sys/net/ipv4/tcp_mtu_probing /proc/sys/net/ipv4/tcp_notsent_lowat)
+hostwatch() { cat /proc/sys/net/ipv4/tcp_ecn /proc/sys/net/ipv4/tcp_mtu_probing /proc/sys/net/ipv4/tcp_notsent_lowat /proc/sys/net/ipv4/tcp_rmem /proc/sys/net/ipv4/tcp_wmem /proc/sys/net/core/rmem_max /proc/sys/fs/inotify/max_user_watches /proc/sys/fs/inotify/max_user_instances; }
+host_before=$(hostwatch)
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 
@@ -61,13 +62,40 @@ grep -q "rolled back" "$work/fail.out" && ok "rollback is reported" || bad "roll
 "\$t" apply net.ecn=1 --yes >/dev/null 2>&1
 "\$t" undo --yes >/dev/null 2>&1
 want tcp_ecn "\$ecn0" "undo puts the last change back"
+
+# Multi-number settings: the kernel prints them with tabs and the restore
+# must put the exact original back.
+spaced() { tr '\t' ' ' <"\$1"; }
+rm0=\$(spaced /proc/sys/net/ipv4/tcp_rmem); wm0=\$(spaced /proc/sys/net/ipv4/tcp_wmem)
+"\$t" apply net.buffers=fast --yes >"$work/buf.out" 2>&1
+if [ \$? -eq 0 ]; then
+	[ "\$(spaced /proc/sys/net/ipv4/tcp_rmem)" = "4096 131072 16777216" ] && ok "tcp_rmem ceiling raised on the live kernel" || bad "tcp_rmem ceiling raised (is \$(spaced /proc/sys/net/ipv4/tcp_rmem))"
+	[ "\$(spaced /proc/sys/net/ipv4/tcp_wmem)" = "4096 16384 16777216" ] && ok "tcp_wmem ceiling raised on the live kernel" || bad "tcp_wmem ceiling raised"
+	"\$t" undo --yes >/dev/null 2>&1
+	[ "\$(spaced /proc/sys/net/ipv4/tcp_rmem)" = "\$rm0" ] && [ "\$(spaced /proc/sys/net/ipv4/tcp_wmem)" = "\$wm0" ] && ok "buffer limits restored exactly" || bad "buffer limits restored exactly"
+else
+	# This namespace refuses net.core.*; the point is that the half-applied
+	# change is rolled back completely and the next command still works.
+	[ "\$(spaced /proc/sys/net/ipv4/tcp_rmem)" = "\$rm0" ] && [ "\$(spaced /proc/sys/net/ipv4/tcp_wmem)" = "\$wm0" ] && ok "a write the kernel refuses is rolled back completely (net.buffers)" || bad "refused write rolled back completely (net.buffers)"
+	grep -q "rolled back" "$work/buf.out" && ok "the rollback is reported" || bad "the rollback is reported: \$(tail -3 "$work/buf.out" | tr '\n' ' ')"
+fi
+
+w0=\$(cat /proc/sys/fs/inotify/max_user_watches); i0=\$(cat /proc/sys/fs/inotify/max_user_instances)
+"\$t" apply sys.watchers=more --yes >"$work/w.out" 2>&1
+if [ \$? -eq 0 ]; then
+	[ "\$(cat /proc/sys/fs/inotify/max_user_watches)" = 524288 ] && ok "inotify watch limit raised on the live kernel" || bad "inotify watch limit raised"
+	"\$t" undo --yes >/dev/null 2>&1
+	[ "\$(cat /proc/sys/fs/inotify/max_user_watches)" = "\$w0" ] && [ "\$(cat /proc/sys/fs/inotify/max_user_instances)" = "\$i0" ] && ok "inotify limits restored exactly" || bad "inotify limits restored exactly"
+else
+	echo "  skip  sys.watchers (not writable from this namespace): \$(tail -2 "$work/w.out" | tr '\n' ' ')"
+fi
 exit \$fails
 INNER
 
 echo "== real-kernel round trip (network namespace)"
 unshare -Urn bash "$work/inner.sh"
 rc=$?
-host_after=$(cat /proc/sys/net/ipv4/tcp_ecn /proc/sys/net/ipv4/tcp_mtu_probing /proc/sys/net/ipv4/tcp_notsent_lowat)
+host_after=$(hostwatch)
 if [ "$host_before" = "$host_after" ]; then echo "  ok    host settings untouched"; else echo "  FAIL  host settings changed!"; rc=1; fi
 [ $rc -eq 0 ] && echo "== RESULT: OK" || echo "== RESULT: FAILED"
 exit $rc

@@ -42,7 +42,6 @@ var gamingItems = items(
 	"input.kb-poll", "1",
 	"input.pad-poll", "1",
 	"game.max-map-count", "1048576",
-	"game.split-lock", "0",
 	"mem.compaction", "0",
 	"mem.thp-defrag", "defer+madvise",
 	"mem.stat-interval", "10",
@@ -57,14 +56,14 @@ func Presets() []Preset {
 			ID: "gaming", Key: "g", Headline: "Boost for gaming", Blurb: "Fast CPU/GPU, lower input delay, fewer stutters", Name: "Gaming",
 			Summary: "Keep the CPU and GPU fast, reduce input delay and avoid kernel behaviours that can cause game stutter.",
 			Best:    "A gaming session on a desktop or a plugged-in laptop.",
-			Cost:    "More heat, fan noise and power use while it is set. Everything resets at reboot, and `turbo snapshots restore` undoes it sooner.",
+			Cost:    "More heat, fan noise and power use while it is set, and a laptop on battery drains faster. No speed-up is promised: check with Benchmark Lab. Everything resets at reboot, and `turbo undo` reverses it sooner. The split-lock setting is left out on purpose: it removes a protection, so apply it yourself only if you need it.",
 			Items:   gamingItems,
 		},
 		{
 			ID: "desktop", Key: "d", Headline: "Make the desktop snappier", Blurb: "Quicker file and window actions, fewer freezes", Name: "Desktop",
 			Summary: "Make everyday use feel more responsive: quicker window and file operations, fewer stalls when copying files or using swap.",
 			Best:    "Everyday desktop use, development and multitasking.",
-			Cost:    "Slightly more frequent disk writes and a little more memory kept free. No effect on battery life worth noting.",
+			Cost:    "The disk is written a little more often, a little more memory is held back and the USB devices stay powered, so a laptop on battery may last somewhat less (not measured). No speed-up is promised, and everything resets at reboot.",
 			Items: items(
 				"cpu.epp", "balance_performance",
 				"cpu.autogroup", "1",
@@ -83,7 +82,7 @@ func Presets() []Preset {
 			ID: "network", Key: "n", Headline: "Cut network lag", Blurb: "Lower ping while downloading, quicker connections", Name: "Network",
 			Summary: "Keep ping low while the connection is busy and make TCP traffic start and recover faster.",
 			Best:    "Online gaming and calls on a connection that is also used for downloads; Wi-Fi laptops.",
-			Cost:    "Wi-Fi power saving off uses more battery on laptops. Game traffic itself (UDP) is not changed.",
+			Cost:    "Wi-Fi power saving off uses more battery on laptops. BBR can take more than its fair share of a link other devices use, and the fast-open shortcut has a small privacy cost. Game traffic itself (UDP) is not changed, and any of this can make a particular network worse; measure with Network Doctor.",
 			Items: items(
 				"net.qdisc", "fq_codel",
 				"net.tcp-cc", "bbr",
@@ -100,7 +99,7 @@ func Presets() []Preset {
 			ID: "maximum", Key: "m", Headline: "Maximum performance", Blurb: "Gaming plus an always-ready CPU. Hot and loud", Name: "Maximum",
 			Summary: "Everything in Gaming, plus pinning the CPU floor high and removing background interruptions.",
 			Best:    "Short, demanding sessions while plugged in: rendering, competitive play, benchmarks.",
-			Cost:    "The most heat, noise and idle power of any preset. Keep your laptop plugged in and revert when you are done.",
+			Cost:    "The most heat, noise and idle power of any preset. Keep your laptop plugged in and revert when you are done. It also turns off the processor freeze check, so a hard lock-up leaves no message in the logs.",
 			Items: append(append([]PresetItem{}, gamingItems...), items(
 				"cpu.min-perf", "100",
 				"cpu.hwp-boost", "1",

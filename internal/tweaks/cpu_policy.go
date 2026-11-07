@@ -19,7 +19,9 @@ import (
 // manager is active — otherwise the manager would overwrite it or fight it.
 type CPUPolicy struct{}
 
-func (CPUPolicy) Meta() Meta {
+func (CPUPolicy) Meta() Meta { return plained(CPUPolicy{}.rawMeta()) }
+
+func (CPUPolicy) rawMeta() Meta {
 	return Meta{
 		ID:       "cpu.governor",
 		Name:     "CPU speed policy (governor)",
@@ -100,7 +102,7 @@ func (CPUPolicy) Assess(_ context.Context, env Env) Assessment {
 			}
 		}
 	}
-	return Assessment{Available: true, Current: cur, Options: opts}
+	return Assessment{Available: true, Current: cur, Options: plainOpts("cpu.governor", opts), Recommend: governorSuggestion(env, cur)}
 }
 
 func (CPUPolicy) Read(_ context.Context, env Env, want State) (State, error) {

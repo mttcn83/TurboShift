@@ -73,6 +73,9 @@ var (
 	num10    = regexp.MustCompile(`^[0-9]{1,10}$`)
 	bufVal   = regexp.MustCompile(`^[0-9]{5,9}$`)
 	minFree  = regexp.MustCompile(`^[0-9]{4,8}$`)
+	// tcp_rmem / tcp_wmem: "min default max", single-spaced.
+	tcpMem   = regexp.MustCompile(`^[0-9]{4,5} [0-9]{4,8} [0-9]{5,9}$`)
+	inotifyN = regexp.MustCompile(`^[0-9]{3,8}$`)
 
 	// rules is the complete list of things the root helper will ever write.
 	// Every pattern is anchored and contains no wildcard that could match a
@@ -123,6 +126,8 @@ var (
 		{regexp.MustCompile(`^/proc/sys/net/core/(rmem_max|wmem_max)$`), bufVal, nil},
 		{regexp.MustCompile(`^/proc/sys/net/core/netdev_max_backlog$`), regexp.MustCompile(`^[0-9]{3,6}$`), nil},
 		{regexp.MustCompile(`^/proc/sys/net/ipv4/(tcp_mtu_probing|tcp_ecn)$`), zeroTwo, nil},
+		{regexp.MustCompile(`^/proc/sys/net/ipv4/(tcp_rmem|tcp_wmem)$`), tcpMem, SpaceSeparated},
+		{regexp.MustCompile(`^/proc/sys/fs/inotify/(max_user_watches|max_user_instances)$`), inotifyN, nil},
 	}
 )
 
@@ -137,6 +142,11 @@ var ceilings = []struct {
 	{regexp.MustCompile(`^/proc/sys/vm/min_free_kbytes$`), 4 << 20}, // 4 GiB
 	{regexp.MustCompile(`^/proc/sys/vm/max_map_count$`), 1<<31 - 1},
 	{regexp.MustCompile(`^/proc/sys/net/ipv4/tcp_notsent_lowat$`), 1<<32 - 1},
+	// For the three-number buffer settings the limit applies to the last
+	// (largest) number: a 256 MiB per-connection ceiling.
+	{regexp.MustCompile(`^/proc/sys/net/ipv4/(tcp_rmem|tcp_wmem)$`), 256 << 20},
+	{regexp.MustCompile(`^/proc/sys/fs/inotify/max_user_watches$`), 4 << 20},
+	{regexp.MustCompile(`^/proc/sys/fs/inotify/max_user_instances$`), 65536},
 }
 
 // ActiveChoice extracts the active entry from a "none [mq-deadline] kyber"
@@ -150,6 +160,10 @@ func ActiveChoice(s string) string {
 	}
 	return s
 }
+
+// SpaceSeparated collapses the tabs the kernel prints between the numbers of a
+// multi-value setting ("4096\t131072\t6291456") to single spaces.
+func SpaceSeparated(s string) string { return strings.Join(strings.Fields(s), " ") }
 
 // BoolChoice reads a kernel boolean that prints Y/N (or 1/0) as "1"/"0".
 func BoolChoice(s string) string {
@@ -186,7 +200,11 @@ func Validate(a Action) error {
 			if !c.path.MatchString(a.Path) {
 				continue
 			}
-			if n, err := strconv.ParseUint(a.Value, 10, 64); err != nil || n > c.max {
+			last := a.Value
+			if f := strings.Fields(a.Value); len(f) > 0 {
+				last = f[len(f)-1]
+			}
+			if n, err := strconv.ParseUint(last, 10, 64); err != nil || n > c.max {
 				return fmt.Errorf("%w: %q is above the safe limit of %d for %s", ErrDenied, a.Value, c.max, a.Path)
 			}
 		}

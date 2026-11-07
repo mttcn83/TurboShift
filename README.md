@@ -57,14 +57,14 @@ Uninstall with `sudo make uninstall`. TurboShift keeps its data in your XDG dire
 | --- | --- |
 | **1 Dashboard** | Live CPU/RAM/GPU/network gauges, hardware card, health summary, **Scan My PC** and **Optimize My PC**. |
 | **2 Doctor** | Findings sorted worst-first, each with its evidence; findings with a safe fix jump to the Optimizer (nothing is applied by jumping). |
-| **3 Optimizer** | Searchable catalog: tier (recommended / situational / advanced), risk, current → proposed value, trade-off, and how to measure it. |
+| **3 Optimizer** | Searchable, filterable catalog (category, tier, "suggested for this PC", no-password-only): plain-language description, risk, current → proposed value, trade-off, whether a restart is needed, and how to measure it. |
 | **4 Gaming** | Builds Steam launch options (GameMode, MangoHud overlay/log, hybrid-GPU offload) and copies them. Changes no system settings. |
 | **5 Network** | Layered diagnosis: link → router → DNS → internet → load. Local-only by default; external tests need explicit consent. |
 | **6 Benchmark** | Import MangoHud logs, label them by configuration, compare two configurations with verdicts and uncertainty. |
 | **7 Vault** | Every restore point with its journal; undo, force-undo, recover interrupted changes. |
 | **8 Settings** | Theme (incl. colour-blind-safe and no-colour), ASCII-only mode, network test targets, privacy statement. |
 
-Keys: `1`-`8` or `Tab` switch screens · `↑↓` move · `Space` select · `Enter` open/confirm · `/` search · `?` help · `q` quit. On the Dashboard, `g` `d` `n` `m` start the Gaming / Snappy desktop / Network / Maximum goals (always previewed first) and `u` undoes the last change. In the Optimizer, `p` picks a preset and `c` cycles the category filter. The mouse works everywhere (tabs, rows, buttons, dialogs, wheel). `NO_COLOR` and `TERM=dumb` are honoured; the Linux console and non-UTF-8 locales get an ASCII-only rendering automatically.
+Keys: `1`-`8` or `Tab` switch screens · `↑↓` move · `Space` select · `Enter` open/confirm · `/` search · `?` help · `q` quit. On the Dashboard, `g` `d` `n` `m` start the Gaming / Snappy desktop / Network / Maximum goals (always previewed first) and `u` undoes the last change. In the Optimizer, `a` applies the setting under the cursor (or everything you ticked), `p` picks a preset, `c` cycles the category, `t` the tier, `v` the view (all / suggested for this PC) and `w` hides anything that needs an administrator password; `Esc` clears the filters. The filter chips above the list are clickable. The mouse works everywhere (tabs, rows, buttons, dialogs, wheel). `NO_COLOR` and `TERM=dumb` are honoured; the Linux console and non-UTF-8 locales get an ASCII-only rendering automatically.
 
 ### A typical session
 
@@ -73,7 +73,7 @@ Keys: `1`-`8` or `Tab` switch screens · `↑↓` move · `Space` select · `Ent
 3. **Enter** applies it: restore point → apply → verify → result. The result dialog has **Undo** (`u`).
 4. Later: **Vault** shows the restore point; `Enter` restores it. Settings that another program changed since are *left alone and reported* unless you choose force.
 
-## Optimizations included (54)
+## Optimizations included (57)
 
 Every entry is a real kernel or desktop setting with a plain-language explanation of what it does, who it helps, what it costs and how to measure it. Nothing is applied until you pick a value and confirm the preview; each change gets a restore point, is verified against the live system, and can be undone.
 
@@ -92,94 +92,99 @@ One keypress ticks a ready-made bundle; you still review the exact preview befor
 
 In the app press `p` in the Optimizer. From the shell: `turbo preset list`, `turbo preset show gaming`, `turbo preset apply gaming [--dry-run] [--yes]`. Items that do not apply to your machine (no AMD GPU, no Hyprland, a power manager in charge...) are skipped and listed, never forced.
 
+<!-- catalog:start -->
 ### CPU & Power (12)
 
-| ID | What you get | Tier | Admin | Lasts |
-| --- | --- | --- | --- | --- |
-| `power.profile` | **Performance / balanced / power-saver mode**: Switch the whole system between speed and battery saving with one setting. | recommended | no | persistent |
-| `cpu.governor` | **CPU speed policy (governor)**: Tell every CPU core how eagerly to run fast. Offered only when no power manager is in charge. | advanced | yes | until reboot |
-| `cpu.epp` | **Make the CPU favour speed over saving power**: Tell the CPU's own speed controller to ramp up faster, or to save more power. | situational | yes | until reboot |
-| `cpu.boost` | **Let the CPU run faster than its base speed (turbo)**: Allow or forbid the CPU to run above its base clock. | situational | yes | until reboot |
-| `cpu.min-perf` | **Keep the CPU from idling low**: Raise the lowest speed the CPU is allowed to drop to, so it reacts sooner instead of ramping up. | situational | yes | until reboot |
-| `cpu.hwp-boost` | **Faster CPU boost after waiting**: Make the CPU jump to full speed the moment a program resumes after waiting on disk or network. | situational | yes | until reboot |
-| `platform.profile` | **Laptop fan and power mode**: Switch the laptop firmware between quiet, balanced and performance modes. | advanced | yes | until reboot |
-| `cpu.autogroup` | **Keep the desktop smooth during heavy builds**: Give each terminal and session its own fair share of CPU, so one huge job cannot make the rest sluggish. | advanced | yes | until reboot |
-| `sys.watchdog` | **Turn off the CPU lock-up detector**: Stop the kernel from waking every CPU once every few seconds just to check that it has not frozen. | situational | yes | until reboot |
-| `pcie.aspm` | **Stop PCIe devices from dozing off (lower latency)**: Keep PCI Express links fully awake so NVMe drives, GPUs and network cards answer sooner. | advanced | yes | until reboot |
-| `usb.autosuspend` | **Stop USB devices from falling asleep**: Keep mice, keyboards and headsets awake so the first click or sound after a pause is not delayed. | situational | yes | until reboot |
-| `mem.stat-interval` | **Fewer background interruptions**: Make the kernel update its memory statistics less often, so it interrupts your CPU cores less. | situational | yes | until reboot |
+| ID | What you get | Tier | Risk | Admin | Lasts |
+| --- | --- | --- | --- | --- | --- |
+| `power.profile` | **Performance / balanced / power-saver mode**: Switch the whole system between speed and battery saving with one setting. | recommended | low | no | persistent |
+| `cpu.governor` | **CPU speed policy (governor)**: Tell every CPU core how eagerly to run fast. Offered only when no power manager is in charge. | advanced | medium | yes | until reboot |
+| `cpu.epp` | **Make the CPU favour speed over saving power**: Tell the CPU's own speed controller to ramp up faster, or to save more power. | recommended | low | yes | until reboot |
+| `cpu.boost` | **Let the CPU run faster than its base speed (turbo)**: Allow or forbid the CPU to run above its base clock. | recommended | low | yes | until reboot |
+| `cpu.min-perf` | **Keep the CPU from idling low**: Raise the lowest speed the CPU is allowed to drop to, so it reacts sooner instead of ramping up. | situational | low | yes | until reboot |
+| `cpu.hwp-boost` | **Faster CPU boost after waiting**: Make the CPU jump to full speed the moment a program resumes after waiting on disk or network. | situational | low | yes | until reboot |
+| `platform.profile` | **Laptop fan and power mode**: Switch the laptop firmware between quiet, balanced and performance modes. | advanced | low | yes | until reboot |
+| `cpu.autogroup` | **Keep the desktop smooth during heavy builds**: Give each terminal and session its own fair share of CPU, so one huge job cannot make the rest sluggish. | advanced | low | yes | until reboot |
+| `sys.watchdog` | **Turn off the CPU lock-up detector**: Stop the kernel from waking every CPU once every few seconds just to check that it has not frozen. | situational | low | yes | until reboot |
+| `pcie.aspm` | **Stop PCIe devices from dozing off (lower latency)**: Keep PCI Express links fully awake so NVMe drives, GPUs and network cards answer sooner. | advanced | low | yes | until reboot |
+| `usb.autosuspend` | **Stop USB devices from falling asleep**: Keep mice, keyboards and headsets awake so the first click or sound after a pause is not delayed. | situational | low | yes | until reboot |
+| `mem.stat-interval` | **Fewer background interruptions**: Make the kernel update its memory statistics less often, so it interrupts your CPU cores less. | situational | low | yes | until reboot |
 
-### Input & Latency (3)
+### Input & Latency (4)
 
-| ID | What you get | Tier | Admin | Lasts |
-| --- | --- | --- | --- | --- |
-| `input.mouse-poll` | **Faster USB mouse reports**: Ask USB mice to report as often as possible, so your input reaches the game sooner. | situational | yes | until reboot |
-| `input.kb-poll` | **Faster USB keyboard reports**: Ask USB keyboards to report as often as possible, so your input reaches the game sooner. | situational | yes | until reboot |
-| `input.pad-poll` | **Faster USB controller reports**: Ask USB controllers and joysticks to report as often as possible, so your input reaches the game sooner. | situational | yes | until reboot |
+| ID | What you get | Tier | Risk | Admin | Lasts |
+| --- | --- | --- | --- | --- | --- |
+| `input.mouse-poll` | **Faster USB mouse reports**: Ask USB mice to report as often as possible, so your input reaches the game sooner. | situational | low | yes | until reboot |
+| `input.kb-poll` | **Faster USB keyboard reports**: Ask USB keyboards to report as often as possible, so your input reaches the game sooner. | situational | low | yes | until reboot |
+| `input.pad-poll` | **Faster USB controller reports**: Ask USB controllers and joysticks to report as often as possible, so your input reaches the game sooner. | situational | low | yes | until reboot |
+| `audio.quantum` | **Fix crackling audio or lower audio delay**: Choose how big PipeWire's audio buffer is: larger stops crackles and pops, smaller cuts the delay between an action and the sound. | situational | low | no | this session |
 
 ### Network (12)
 
-| ID | What you get | Tier | Admin | Lasts |
-| --- | --- | --- | --- | --- |
-| `net.wifi-powersave` | **Steadier Wi-Fi (turn off radio power saving)**: Stop the Wi-Fi radio from napping between packets, which can add small, random delays. | situational | no | persistent |
-| `net.dns` | **Faster website and game-server lookups (DNS)**: Use a different DNS service on this connection if your router's or ISP's is slow. | situational | no | persistent |
-| `net.tcp-cc` | **Better download speed on lossy or long links (BBR)**: Choose how downloads and web traffic react to lost packets and delay. | advanced | yes | until reboot |
-| `net.qdisc` | **Less lag while downloading (fight bufferbloat)**: Keep ping low when the connection is busy by scheduling packets fairly. | advanced | yes | until reboot |
-| `net.tcp-fastopen` | **Reconnect to websites one round trip sooner**: Send the first data together with the connection request on repeat visits. | advanced | yes | until reboot |
-| `net.tcp-idle` | **Keep connections fast after a pause**: Stop long-lived connections from slowing down after a short pause. | advanced | yes | until reboot |
-| `net.notsent-lowat` | **Less lag on busy TCP connections**: Stop programs from stuffing the send queue, so interactive traffic (remote desktop, SSH, streaming) reacts sooner. | advanced | yes | until reboot |
-| `net.buffers` | **Faster downloads on fast or far links**: Allow bigger network buffers so a single download can fill a gigabit or long-distance connection. | advanced | yes | until reboot |
-| `net.budget` | **Handle very busy network links without hiccups**: Let the kernel process more incoming packets per interrupt. | advanced | yes | until reboot |
-| `net.backlog` | **Stop dropping packets in bursts**: Make the incoming-packet queue longer so short bursts are not thrown away. | advanced | yes | until reboot |
-| `net.mtu-probing` | **Recover from stuck connections on odd networks**: Let TCP find a working packet size by itself when a VPN, tunnel or hotel network silently drops big packets. | situational | yes | until reboot |
-| `net.ecn` | **Smoother traffic with modern routers (ECN)**: Let routers tell your connection to slow down by marking packets instead of dropping them. | advanced | yes | until reboot |
+| ID | What you get | Tier | Risk | Admin | Lasts |
+| --- | --- | --- | --- | --- | --- |
+| `net.wifi-powersave` | **Steadier Wi-Fi (turn off radio power saving)**: Stop the Wi-Fi radio from napping between packets, which can add small, random delays. | situational | low | no | persistent |
+| `net.dns` | **Faster website and game-server lookups (DNS)**: Use a different DNS service on this connection if your router's or ISP's is slow. | situational | low | no | persistent |
+| `net.tcp-cc` | **Better download speed on lossy or long links (BBR)**: Choose how downloads and web traffic react to lost packets and delay. | advanced | low | yes | until reboot |
+| `net.qdisc` | **Less lag while downloading (fight bufferbloat)**: Keep ping low when the connection is busy by scheduling packets fairly. | recommended | low | yes | until reboot |
+| `net.tcp-fastopen` | **Reconnect to websites one round trip sooner**: Send the first data together with the connection request on repeat visits. | advanced | low | yes | until reboot |
+| `net.tcp-idle` | **Keep connections fast after a pause**: Stop long-lived connections from slowing down after a short pause. | advanced | low | yes | until reboot |
+| `net.notsent-lowat` | **Less lag on busy TCP connections**: Stop programs from stuffing the send queue, so interactive traffic (remote desktop, SSH, streaming) reacts sooner. | advanced | low | yes | until reboot |
+| `net.buffers` | **Faster downloads on fast or far links**: Allow bigger network buffers so a single download can fill a gigabit or long-distance connection. | advanced | low | yes | until reboot |
+| `net.budget` | **Handle very busy network links without hiccups**: Let the kernel process more incoming packets per interrupt. | advanced | low | yes | until reboot |
+| `net.backlog` | **Stop dropping packets in bursts**: Make the incoming-packet queue longer so short bursts are not thrown away. | advanced | low | yes | until reboot |
+| `net.mtu-probing` | **Recover from stuck connections on odd networks**: Let TCP find a working packet size by itself when a VPN, tunnel or hotel network silently drops big packets. | situational | low | yes | until reboot |
+| `net.ecn` | **Smoother traffic with modern routers (ECN)**: Let routers tell your connection to slow down by marking packets instead of dropping them. | advanced | low | yes | until reboot |
 
 ### Memory (11)
 
-| ID | What you get | Tier | Admin | Lasts |
-| --- | --- | --- | --- | --- |
-| `mem.swappiness` | **Keep your programs in RAM longer (swappiness)**: Set how eagerly the kernel moves idle memory out to swap. | advanced | yes | until reboot |
-| `mem.zswap` | **Compress memory before swapping to disk**: Keep swapped-out pages compressed in RAM so a nearly full machine stalls far less. | advanced | yes | until reboot |
-| `mem.zswap-compressor` | **Pick the memory compression speed**: Trade compression strength against CPU time for zswap. | advanced | yes | until reboot |
-| `mem.page-cluster` | **Faster recovery from swap (zram or SSD)**: Read back only the page you need when memory is swapped in. | advanced | yes | until reboot |
-| `mem.vfs-cache` | **Remember file locations longer**: Keep directory and file-name caches in memory longer, so repeated lookups are fast. | advanced | yes | until reboot |
-| `mem.compaction` | **Stop background memory tidying**: Stop the kernel from defragmenting memory in the background while you are working. | advanced | yes | until reboot |
-| `mem.thp` | **Choose how memory is handed out in big chunks (THP)**: Decide when the kernel backs memory with large pages. | advanced | yes | until reboot |
-| `mem.thp-defrag` | **Fewer stalls when memory gets large pages**: Stop programs from freezing while the kernel tidies memory to make large pages. | advanced | yes | until reboot |
-| `mem.min-free` | **Keep some RAM always free**: Hold back a bigger reserve of free memory so programs rarely have to wait for the kernel to clear space. | advanced | yes | until reboot |
-| `mem.watermark-scale` | **Start freeing memory earlier**: Have the kernel begin clearing memory in the background sooner, so programs rarely wait for it. | advanced | yes | until reboot |
-| `mem.ksm` | **Stop scanning memory for duplicates**: Turn off a background thread that hunts for identical pages, which is wasted work outside of VM hosts. | situational | yes | until reboot |
+| ID | What you get | Tier | Risk | Admin | Lasts |
+| --- | --- | --- | --- | --- | --- |
+| `mem.swappiness` | **Keep your programs in RAM longer (swappiness)**: Set how eagerly the kernel moves idle memory out to swap. | advanced | low | yes | until reboot |
+| `mem.zswap` | **Compress memory before swapping to disk**: Keep swapped-out pages compressed in RAM so a nearly full machine stalls far less. | advanced | low | yes | until reboot |
+| `mem.zswap-compressor` | **Pick the memory compression speed**: Trade compression strength against CPU time for zswap. | advanced | low | yes | until reboot |
+| `mem.page-cluster` | **Faster recovery from swap (zram or SSD)**: Read back only the page you need when memory is swapped in. | recommended | low | yes | until reboot |
+| `mem.vfs-cache` | **Remember file locations longer**: Keep directory and file-name caches in memory longer, so repeated lookups are fast. | advanced | low | yes | until reboot |
+| `mem.compaction` | **Stop background memory tidying**: Stop the kernel from defragmenting memory in the background while you are working. | advanced | low | yes | until reboot |
+| `mem.thp` | **Choose how memory is handed out in big chunks (THP)**: Decide when the kernel backs memory with large pages. | advanced | medium | yes | until reboot |
+| `mem.thp-defrag` | **Fewer stalls when memory gets large pages**: Stop programs from freezing while the kernel tidies memory to make large pages. | advanced | low | yes | until reboot |
+| `mem.min-free` | **Keep some RAM always free**: Hold back a bigger reserve of free memory so programs rarely have to wait for the kernel to clear space. | advanced | medium | yes | until reboot |
+| `mem.watermark-scale` | **Start freeing memory earlier**: Have the kernel begin clearing memory in the background sooner, so programs rarely wait for it. | advanced | low | yes | until reboot |
+| `mem.ksm` | **Stop scanning memory for duplicates**: Turn off a background thread that hunts for identical pages, which is wasted work outside of VM hosts. | situational | low | yes | until reboot |
 
-### Storage (7)
+### Storage (8)
 
-| ID | What you get | Tier | Admin | Lasts |
-| --- | --- | --- | --- | --- |
-| `io.scheduler` | **Choose how the kernel orders disk requests**: Pick the policy that decides which disk requests go first. | advanced | yes | until reboot |
-| `io.readahead` | **Read ahead further on big files**: Prefetch more data when you read large files in order (game loading, video, backups). | advanced | yes | until reboot |
-| `io.rq-affinity` | **Finish disk requests on the same CPU**: Complete each disk request on the core that asked for it, keeping its data in that core's fast cache. | advanced | yes | until reboot |
-| `io.nomerges` | **Skip merging on very fast drives**: Let NVMe drives take small requests as they are, instead of spending CPU to merge them first. | advanced | yes | until reboot |
-| `io.add-random` | **Skip wasted work on every disk request**: Stop SSDs from contributing the timing of every request to the random-number pool, which is not needed. | advanced | yes | until reboot |
-| `mem.dirty` | **Avoid long freezes after big file copies**: Control how much unsaved data may pile up in RAM before the kernel writes it to disk. | advanced | yes | until reboot |
-| `mem.writeback-timing` | **Smoother disk writes**: Control how often unsaved data is pushed to disk, to avoid long pauses or save laptop battery. | advanced | yes | until reboot |
+| ID | What you get | Tier | Risk | Admin | Lasts |
+| --- | --- | --- | --- | --- | --- |
+| `io.scheduler` | **Choose how the kernel orders disk requests**: Pick the policy that decides which disk requests go first. | advanced | low | yes | until reboot |
+| `io.readahead` | **Read ahead further on big files**: Prefetch more data when you read large files in order (game loading, video, backups). | advanced | low | yes | until reboot |
+| `io.rq-affinity` | **Finish disk requests on the same CPU**: Complete each disk request on the core that asked for it, keeping its data in that core's fast cache. | advanced | low | yes | until reboot |
+| `io.nomerges` | **Skip merging on very fast drives**: Let NVMe drives take small requests as they are, instead of spending CPU to merge them first. | advanced | low | yes | until reboot |
+| `io.add-random` | **Skip wasted work on every disk request**: Stop SSDs from contributing the timing of every request to the random-number pool, which is not needed. | advanced | low | yes | until reboot |
+| `mem.dirty` | **Avoid long freezes after big file copies**: Control how much unsaved data may pile up in RAM before the kernel writes it to disk. | advanced | medium | yes | until reboot |
+| `mem.writeback-timing` | **Smoother disk writes**: Control how often unsaved data is pushed to disk, to avoid long pauses or save laptop battery. | advanced | medium | yes | until reboot |
+| `sys.watchers` | **Let editors and sync tools watch more files**: Raise the limit on how many files programs can watch for changes, which fixes "too many open files" and "file watchers reached" errors. | recommended | low | yes | until reboot |
 
 ### Gaming (5)
 
-| ID | What you get | Tier | Admin | Lasts |
-| --- | --- | --- | --- | --- |
-| `game.max-map-count` | **Higher memory-map limit for big games**: Raise the limit on memory regions a single program may map. | situational | yes | until reboot |
-| `game.split-lock` | **Reduce a stutter in some Windows games**: Stop the kernel from slowing programs that use split-lock memory operations. | situational | yes | until reboot |
-| `gpu.amd-level` | **Keep the AMD graphics card at full speed**: Hold an AMD graphics card at high clocks so games wait less for it to speed up. | situational | yes | until reboot |
-| `gpu.intel-min-clock` | **Wake the Intel graphics faster**: Raise the lowest speed of Intel integrated graphics so it is ready the moment a frame arrives. | situational | yes | until reboot |
-| `gpu.dgpu-awake` | **Keep the dedicated graphics card awake**: Stop the discrete GPU from powering down between uses, so games and apps start sooner. | situational | yes | until reboot |
+| ID | What you get | Tier | Risk | Admin | Lasts |
+| --- | --- | --- | --- | --- | --- |
+| `game.max-map-count` | **Higher memory-map limit for big games**: Raise the limit on memory regions a single program may map. | recommended | low | yes | until reboot |
+| `game.split-lock` | **Reduce a stutter in some Windows games**: Stop the kernel from slowing programs that use split-lock memory operations. | situational | medium | yes | until reboot |
+| `gpu.amd-level` | **Keep the AMD graphics card at full speed**: Hold an AMD graphics card at high clocks so games wait less for it to speed up. | situational | medium | yes | until reboot |
+| `gpu.intel-min-clock` | **Wake the Intel graphics faster**: Raise the lowest speed of Intel integrated graphics so it is ready the moment a frame arrives. | situational | low | yes | until reboot |
+| `gpu.dgpu-awake` | **Keep the dedicated graphics card awake**: Stop the discrete GPU from powering down between uses, so games and apps start sooner. | situational | medium | yes | until reboot |
 
-### Desktop & Graphics (4)
+### Desktop & Graphics (5)
 
-| ID | What you get | Tier | Admin | Lasts |
-| --- | --- | --- | --- | --- |
-| `desktop.hypr-effects` | **Plain, fast Hyprland (no animations, blur or shadows)**: Switch off window animations, background blur and drop shadows so the compositor does far less work per frame. | situational | no | this session |
-| `desktop.hypr-tearing` | **Lower input lag in games (allow tearing)**: Let full-screen games skip waiting for the screen refresh, so your mouse and keyboard show up sooner. | situational | no | this session |
-| `desktop.hypr-direct-scanout` | **Full-screen games skip the compositor**: Send a full-screen game directly to the monitor instead of copying it through the desktop first. | situational | no | this session |
-| `desktop.gnome-animations` | **GNOME / GTK without animations**: Turn off GNOME and GTK animations so windows, menus and workspaces respond without the animation delay. | situational | no | persistent |
+| ID | What you get | Tier | Risk | Admin | Lasts |
+| --- | --- | --- | --- | --- | --- |
+| `desktop.hypr-effects` | **Plain, fast Hyprland (no animations, blur or shadows)**: Switch off window animations, background blur and drop shadows so the compositor does far less work per frame. | situational | low | no | this session |
+| `desktop.hypr-tearing` | **Lower input lag in games (allow tearing)**: Let full-screen games skip waiting for the screen refresh, so your mouse and keyboard show up sooner. | situational | low | no | this session |
+| `desktop.hypr-direct-scanout` | **Full-screen games skip the compositor**: Send a full-screen game directly to the monitor instead of copying it through the desktop first. | situational | low | no | this session |
+| `desktop.hypr-vrr` | **Smoother games on adaptive-sync monitors (VRR)**: Let the monitor follow the game's frame rate instead of a fixed refresh, which removes tearing and judder when the frame rate wobbles. | situational | low | no | this session |
+| `desktop.gnome-animations` | **GNOME / GTK without animations**: Turn off GNOME and GTK animations so windows, menus and workspaces respond without the animation delay. | situational | low | no | persistent |
+<!-- catalog:end -->
 
 All kernel settings are written through one root helper that accepts only an exact allowlist of attributes and value patterns (see [SECURITY.md](SECURITY.md)); the 47 tweaks that need it ask for administrator permission once per tweak, and only work from a system-wide install (`sudo make install`, which also installs a polkit action so one password prompt covers a whole preset for about five minutes). Settings marked *until reboot* reset on restart; none edits a config file. Hyprland settings last until its config reloads.
 
@@ -192,7 +197,7 @@ The TUI is the primary interface; the CLI exists for scripting, SSH and bug repo
 ```
 turbo doctor [--json] [--top]          scan and explain
 turbo status                           summary and pending recovery
-turbo tweaks list [--all] | show <id>   (list hides what your PC cannot do; --all shows it)
+turbo tweaks list [--all] [--suggested] [--tier T] [--max-risk R] [--category C] [--no-password] [words...] | show <id>
 turbo undo [--yes]                      revert the last change TurboShift made
 turbo apply power.profile=performance [--dry-run] [--yes]
 turbo preset list | show <id> | apply <id> [--dry-run] [--yes]
@@ -229,7 +234,7 @@ Exit codes: `0` ok · `1` error · `2` usage error · `3` change rolled back / r
 
 ## Status and honesty
 
-Version `1.0.0`. The command line, tweak and preset IDs, exit codes, `--json` documents and restore-point files are covered by a [stability promise](docs/STABILITY.md). What has been **verified**, and how:
+Version `1.1.0`. The command line, tweak and preset IDs, exit codes, `--json` documents and restore-point files are covered by a [stability promise](docs/STABILITY.md). What has been **verified**, and how:
 
 - **Unit and integration tests** (`make test`, with the race detector): detection against fake `/proc` and `/sys`, the transaction engine (apply, verify, rollback, drift, crash recovery, locking, cancellation), the privilege allowlist (including a fuzz test that no accepted request can leave `/proc/sys` and `/sys`), diagnostics, benchmark statistics, CLI behaviour, exit codes and JSON contracts, restoring a restore point written by the first release, and the TUI driven end to end (scan → preview → apply → verify → undo, mouse hit-testing, every screen from 64×18 to 200×60, no-colour and ASCII output) plus seeded random key/click/resize torture runs.
 - **A real kernel** (`make kernel-test`): apply, live verification, drift-aware restore, automatic rollback after a refused write, and `undo`, run against the real `/proc/sys` of a throw-away network namespace (so your system's settings are never touched). It exercises the five network tweaks that namespace allows (`net.notsent-lowat`, `net.ecn`, `net.mtu-probing`, `net.tcp-idle`, `net.tcp-fastopen`) and the shared engine path every kernel tweak uses.

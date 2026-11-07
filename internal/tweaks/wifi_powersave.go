@@ -36,7 +36,9 @@ var wifiOptions = []Option{
 
 var paramToNM = map[string]string{"off": nmDisable, "on": nmEnable, "default": nmDefault}
 
-func (WifiPowerSave) Meta() Meta {
+func (WifiPowerSave) Meta() Meta { return plained(WifiPowerSave{}.rawMeta()) }
+
+func (WifiPowerSave) rawMeta() Meta {
 	return Meta{
 		ID:       "net.wifi-powersave",
 		Name:     "Steadier Wi-Fi (turn off radio power saving)",
@@ -85,7 +87,7 @@ func (w WifiPowerSave) Assess(ctx context.Context, env Env) Assessment {
 	if err != nil {
 		return Assessment{Reason: "Could not read the connection's settings: " + err.Error()}
 	}
-	a := Assessment{Available: true, Current: cur, Options: wifiOptions}
+	a := Assessment{Available: true, Current: cur, Options: plainOpts("net.wifi-powersave", wifiOptions)}
 	if on := env.Report.Power.OnAC; on != nil && *on && env.Report.Network.WifiPowerSave == "on" && cur["nm_powersave"] != nmDisable {
 		a.Recommend = &Recommendation{
 			Params: map[string]string{"powersave": "off"},

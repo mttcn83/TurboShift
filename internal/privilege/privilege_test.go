@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"syscall"
 	"testing"
@@ -486,8 +487,23 @@ func TestCeilingsRefuseHarmfulMagnitudes(t *testing.T) {
 		{OpWriteSysfs, "/proc/sys/vm/min_free_kbytes", "67584"},
 		{OpWriteSysfs, "/proc/sys/vm/max_map_count", "2147483647"},
 		{OpWriteSysfs, "/proc/sys/net/ipv4/tcp_notsent_lowat", "4294967295"},
+		{OpWriteSysfs, "/proc/sys/net/ipv4/tcp_rmem", "4096 131072 16777216"},
+		{OpWriteSysfs, "/proc/sys/net/ipv4/tcp_wmem", "4096 16384 268435456"},
+		{OpWriteSysfs, "/proc/sys/fs/inotify/max_user_watches", "4194304"},
+		{OpWriteSysfs, "/proc/sys/fs/inotify/max_user_instances", "65536"},
 	}
 	bad := []Action{
+		{OpWriteSysfs, "/proc/sys/net/ipv4/tcp_rmem", "4096 131072 268435457"},
+		{OpWriteSysfs, "/proc/sys/net/ipv4/tcp_rmem", "4096 131072 999999999"},
+		{OpWriteSysfs, "/proc/sys/net/ipv4/tcp_rmem", "4096\t131072\t16777216"},
+		{OpWriteSysfs, "/proc/sys/net/ipv4/tcp_rmem", "4096  131072 16777216"},
+		{OpWriteSysfs, "/proc/sys/net/ipv4/tcp_rmem", "4096 131072"},
+		{OpWriteSysfs, "/proc/sys/net/ipv4/tcp_rmem", "4096 131072 16777216 1"},
+		{OpWriteSysfs, "/proc/sys/net/ipv4/tcp_rmem", "4096 131072 16777216; reboot"},
+		{OpWriteSysfs, "/proc/sys/fs/inotify/max_user_watches", "4194305"},
+		{OpWriteSysfs, "/proc/sys/fs/inotify/max_user_instances", "65537"},
+		{OpWriteSysfs, "/proc/sys/fs/inotify/max_queued_events", "16384"},
+		{OpWriteSysfs, "/proc/sys/fs/file-max", "1000000"},
 		{OpWriteSysfs, "/proc/sys/vm/min_free_kbytes", "4194305"},
 		{OpWriteSysfs, "/proc/sys/vm/min_free_kbytes", "99999999"},
 		{OpWriteSysfs, "/proc/sys/vm/max_map_count", "2147483648"},
@@ -527,7 +543,13 @@ func FuzzValidate(f *testing.F) {
 		if filepath.Clean(path) != path || strings.ContainsAny(path, "\x00\n") || strings.Contains(path, "..") {
 			t.Fatalf("accepted an unclean path: %q", path)
 		}
-		if len(value) == 0 || len(value) > 32 || strings.ContainsAny(value, "\x00\n\r ;|&$`'\"\\/") {
+		// The one multi-word value: three single-spaced numbers for tcp_rmem/tcp_wmem.
+		spaced := regexp.MustCompile(`^/proc/sys/net/ipv4/tcp_[rw]mem$`).MatchString(path) && regexp.MustCompile(`^[0-9]+ [0-9]+ [0-9]+$`).MatchString(value)
+		bad := "\x00\n\r ;|&$`'\"\\/"
+		if spaced {
+			bad = "\x00\n\r;|&$`'\"\\/"
+		}
+		if len(value) == 0 || len(value) > 32 || strings.ContainsAny(value, bad) {
 			t.Fatalf("accepted a suspicious value %q for %s", value, path)
 		}
 	})

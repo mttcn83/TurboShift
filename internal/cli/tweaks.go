@@ -23,8 +23,44 @@ func cmdTweaks(ctx context.Context, a *app.App, args []string, o *out) int {
 		fs := newFlags("tweaks list", o)
 		asJSON := fs.Bool("json", false, "machine-readable output (always includes everything)")
 		all := fs.Bool("all", false, "also list tweaks that are not available on this PC, with the reason")
-		if _, err := parse(fs, args[1:]); err != nil {
+		category := fs.String("category", "", "only this category (e.g. memory, network, \"cpu & power\")")
+		tier := fs.String("tier", "", "only this tier: recommended | situational | advanced")
+		maxRisk := fs.String("max-risk", "", "only this risk or lower: low | medium | high")
+		suggested := fs.Bool("suggested", false, "only what this PC's readings recommend right now")
+		noAdmin := fs.Bool("no-password", false, "only changes that need no administrator password")
+		pos, err := parse(fs, args[1:])
+		if err != nil {
 			return ExitUsage
+		}
+		filter := tweaks.Filter{Query: strings.Join(pos, " "), NoAdmin: *noAdmin}
+		if *suggested {
+			filter.View = tweaks.ViewSuggested
+		}
+		if *tier != "" {
+			t, ok := tweaks.ParseTier(*tier)
+			if !ok {
+				return usageErr(o, "unknown --tier %q (recommended | situational | advanced)", *tier)
+			}
+			filter.Tier = t
+		}
+		if *maxRisk != "" {
+			r, ok := tweaks.ParseRisk(*maxRisk)
+			if !ok {
+				return usageErr(o, "unknown --max-risk %q (low | medium | high)", *maxRisk)
+			}
+			filter.MaxRisk = r
+		}
+		if *category != "" {
+			found := false
+			for _, t := range a.Reg.All() {
+				if c := t.Meta().Category; strings.HasPrefix(strings.ToLower(string(c)), strings.ToLower(strings.TrimSpace(*category))) {
+					filter.Category, found = c, true
+					break
+				}
+			}
+			if !found {
+				return usageErr(o, "unknown --category %q (see the headings in `turbo tweaks list`)", *category)
+			}
 		}
 		type row struct {
 			ID          string                 `json:"id"`
@@ -41,12 +77,22 @@ func cmdTweaks(ctx context.Context, a *app.App, args []string, o *out) int {
 		rows := []row{}
 		for _, t := range a.Reg.All() {
 			m, as := t.Meta(), t.Assess(ctx, env)
+			if !filter.Match(m, as, true) {
+				continue
+			}
 			rows = append(rows, row{m.ID, m.Name, string(m.Category), string(m.Tier), m.Risk.String(), string(m.Scope), as.Available, as.Current, as.Reason, as.Recommend})
 		}
 		if *asJSON {
 			return o.json(jsonDoc("tweaks", rows))
 		}
 		o.heading("tweaks")
+		if filter.Active() {
+			o.printf("  %s\n", o.dim("showing: "+filter.Describe()))
+		}
+		if len(rows) == 0 {
+			o.printf("\n  %s\n\n", "No tweak matches those filters.")
+			return ExitOK
+		}
 		cat, hidden := "", 0
 		for _, r := range rows {
 			if !r.Available && !*all {
@@ -88,9 +134,15 @@ func cmdTweaks(ctx context.Context, a *app.App, args []string, o *out) int {
 		f("Name", m.Name)
 		f("What", m.Summary)
 		f("Details", m.Details)
+		if m.Reboot {
+			f("Restart", "Needs a restart of your computer to take effect.")
+		}
 		f("Helps", m.Helps)
 		f("Trade-off", m.Tradeoff)
 		f("Measure", m.Evidence)
+		if m.Technical != "" && m.Technical != m.Details {
+			f("Technical", m.Technical)
+		}
 		f("Tier/Risk", fmt.Sprintf("%s · risk %s · %s · %s", m.Tier, m.Risk, m.Scope, map[bool]string{true: "needs administrator permission", false: "no root needed"}[m.NeedsAuth]))
 		if as.Available {
 			f("Now", tweaks.Describe(t, as))
@@ -155,6 +207,12 @@ func cmdApply(ctx context.Context, a *app.App, args []string, o *out) int {
 		for _, w := range p.Warnings {
 			o.printf("      %s\n", o.yellow("! "+w))
 		}
+		if tm := t.Meta(); tm.Tradeoff != "" {
+			o.printf("      %s\n", o.yellow("! "+wrap("Cost: "+tm.Tradeoff, 70, "        ")))
+			if tm.Reboot {
+				o.printf("      %s\n", o.yellow("! Needs a restart of your computer to take effect."))
+			}
+		}
 	}
 	if len(pv.Plans) == 0 {
 		o.println()
@@ -195,7 +253,17 @@ func cmdApply(ctx context.Context, a *app.App, args []string, o *out) int {
 		}
 		return ExitError
 	}
-	o.printf("\n  %s Restore point %s\n  Undo any time: turbo snapshots restore %s\n\n", o.green("DONE"), snap.ID, snap.ID)
+	o.printf("\n  %s Restore point %s\n  Undo any time: turbo snapshots restore %s\n", o.green("DONE"), snap.ID, snap.ID)
+	var restart []string
+	for _, it := range snap.Items {
+		if t, ok := a.Reg.Get(it.TweakID); ok && t.Meta().Reboot {
+			restart = append(restart, t.Meta().Name)
+		}
+	}
+	if len(restart) > 0 {
+		o.printf("\n  %s Restart your computer for these to take effect: %s\n", o.yellow("RESTART NEEDED"), strings.Join(restart, ", "))
+	}
+	o.println()
 	return ExitOK
 }
 

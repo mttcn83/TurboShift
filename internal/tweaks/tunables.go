@@ -53,7 +53,7 @@ func DefaultQdisc() Tweak {
 		Helps:    "Anyone whose ping jumps while something downloads or uploads.",
 		Tradeoff: "A scheduler cannot fix bufferbloat that lives in your router's queue, only your own machine's. cake needs a little more CPU on very fast links.",
 		Evidence: "Network Doctor with a load test: compare latency under load before and after (and reconnect the interface first).",
-		Category: CatNetwork, Tier: TierAdvanced, Risk: RiskLow, Scope: ScopeUntilBoot,
+		Category: CatNetwork, Tier: TierRecommended, Risk: RiskLow, Scope: ScopeUntilBoot,
 	}, "default packet scheduler", "default_qdisc", "/proc/sys/net/core/default_qdisc", qdiscOptions, "Applies to interfaces brought up afterwards; resets at reboot.")
 	return t
 }
@@ -71,7 +71,7 @@ func TCPFastOpen() Tweak {
 		Summary:  "Send the first data together with the connection request on repeat visits.",
 		Details:  "Sets TCP Fast Open. With client support the first data goes out in the connection-opening packet once a cookie from the server is cached, which saves one round trip on each new connection to a server that supports it.",
 		Helps:    "Browsing and APIs on high-latency connections.",
-		Tradeoff: "Only helps connections to servers that support it, and some middleboxes drop such packets (the kernel falls back automatically). Gains are one round trip per connection, not bandwidth.",
+		Tradeoff: "Only helps connections to servers that support it, and saves one round trip, not bandwidth. The shortcut can be used to recognise a device across networks (a known privacy cost), and some firewalls drop such packets, which the system works around automatically.",
 		Evidence: "Time many short connections (page loads, API calls) before and after; on a fast LAN the difference is below measurement noise.",
 		Category: CatNetwork, Tier: TierAdvanced, Risk: RiskLow, Scope: ScopeUntilBoot,
 	}, "TCP Fast Open", "tcp_fastopen", "/proc/sys/net/ipv4/tcp_fastopen", fastOpenOptions, resets)
@@ -151,9 +151,9 @@ func DirtyWriteback() Tweak {
 		Summary:  "Control how much unsaved data may pile up in RAM before the kernel writes it to disk.",
 		Details:  "Sets vm.dirty_background_ratio and vm.dirty_ratio together. With lots of RAM and a slow disk, the defaults let gigabytes pile up and then freeze programs while they flush. Lower values spread the writing out.",
 		Helps:    "Machines with lots of RAM that copy big files to slow or USB drives.",
-		Tradeoff: "More frequent writes use the disk more steadily and can lower peak copy speed; higher values risk more data loss on a power cut.",
+		Tradeoff: "Responsive writes data out sooner, which keeps the disk busier and can lower peak copy speed. Throughput does the opposite and is a data-loss risk: up to 40% of RAM can hold unsaved data that is gone for good after a power cut, crash or an unplugged USB drive.",
 		Evidence: "Copy a large file to a slow drive and watch whether the desktop stalls at the end; Doctor shows disk stall pressure.",
-		Category: CatStorage, Tier: TierAdvanced, Risk: RiskLow, Scope: ScopeUntilBoot,
+		Category: CatStorage, Tier: TierAdvanced, Risk: RiskMedium, Scope: ScopeUntilBoot,
 		NeedsAuth: true, ParamName: "mode", Options: opts,
 	}
 	return fileTweak{
@@ -187,7 +187,7 @@ func PageCluster() Tweak {
 		Helps:    "Machines whose swap lives in zram or on an SSD and actually swap.",
 		Tradeoff: "On a hard-disk swap, reading a single page is slower. Irrelevant if you never swap.",
 		Evidence: "Watch memory pressure (Doctor) while the machine is swapping; the gain only exists when it is.",
-		Category: CatMemory, Tier: TierAdvanced, Risk: RiskLow, Scope: ScopeUntilBoot,
+		Category: CatMemory, Tier: TierRecommended, Risk: RiskLow, Scope: ScopeUntilBoot,
 	}, "swap read-ahead", "page_cluster", "/proc/sys/vm/page-cluster", pageClusterOptions, resets)
 	t.gate = func(env Env) string {
 		if env.Report.Memory.SwapTotalKB == 0 {
@@ -238,9 +238,9 @@ func MaxMapCount() Tweak {
 		Summary:  "Raise the limit on memory regions a single program may map.",
 		Details:  "Sets vm.max_map_count. Large games, engines under Wine/Proton and some memory-hungry tools create hundreds of thousands of mappings; at the old limit of 65530 they fail to allocate and crash or hitch. Most current distributions already raise it.",
 		Helps:    "Steam/Proton players of large games; anyone seeing out-of-memory crashes with free RAM.",
-		Tradeoff: "Essentially none: it is only a ceiling. Each mapping costs a little kernel memory when it is used.",
+		Tradeoff: "It is only a ceiling, but a program that wrongly keeps creating memory pieces can now use much more memory before it is stopped. Each piece costs a little system memory when used.",
 		Evidence: "Needed only if a game crashes with out-of-memory errors while RAM is free; there is no frame-rate gain when the limit was not being hit.",
-		Category: CatGaming, Tier: TierSituational, Risk: RiskLow, Scope: ScopeUntilBoot,
+		Category: CatGaming, Tier: TierRecommended, Risk: RiskLow, Scope: ScopeUntilBoot,
 	}, "memory mapping limit", "max_map_count", "/proc/sys/vm/max_map_count", maxMapOptions, resets)
 }
 
@@ -256,9 +256,9 @@ func SplitLockMitigate() Tweak {
 		Summary:  "Stop the kernel from slowing programs that use split-lock memory operations.",
 		Details:  "Sets kernel.split_lock_mitigate to 0. A few games and anti-cheat layers use misaligned atomic instructions; the kernel penalises each with a ~10 ms stall, which shows up as severe stutter.",
 		Helps:    "Wine/Proton games with unexplained micro-freezes (look for 'split lock' messages in dmesg).",
-		Tradeoff: "A program using split locks can then stall other CPU cores' memory access (a local denial-of-service nuisance on shared servers, not a privilege issue). Fine on a personal desktop.",
+		Tradeoff: "This switches off a kernel protection. Any program you run, even a malicious or compromised one with no special permissions, can then slow every other program on the machine by hammering split locks. It is not a privilege-escalation hole, but leave it on for shared computers, servers, and machines where you run code you do not trust. If the kernel never reports split locks on your CPU it changes nothing.",
 		Evidence: "Look for 'x86/split lock detection' messages in `dmesg`; if there are none, this changes nothing.",
-		Category: CatGaming, Tier: TierSituational, Risk: RiskLow, Scope: ScopeUntilBoot,
+		Category: CatGaming, Tier: TierSituational, Risk: RiskMedium, Scope: ScopeUntilBoot,
 	}, "split-lock penalty", "split_lock_mitigate", "/proc/sys/kernel/split_lock_mitigate", splitLockOptions, resets)
 }
 
@@ -293,9 +293,9 @@ func TransparentHugepages() Tweak {
 		Summary:  "Decide when the kernel backs memory with large pages.",
 		Details:  "Sets the transparent huge page policy. Huge pages reduce address-translation overhead for memory-hungry programs (databases, JVMs, emulators, some games) but the kernel sometimes has to defragment memory to create them, which can cause latency spikes.",
 		Helps:    "Memory-hungry programs: 'always' for throughput, 'never' or 'madvise' for steady latency.",
-		Tradeoff: "'always' can help throughput and hurt latency; 'never' is the reverse. Neither is universally better, which is why nothing here is recommended automatically.",
+		Tradeoff: "'always' can raise throughput but also memory use (programs can end up holding far more RAM than they use) and cause latency spikes; several database vendors tell you to avoid it. 'never' is the reverse: steadier, a little slower for memory-heavy programs. Neither is better for everyone, so nothing here is recommended automatically.",
 		Evidence: "Compare frame-time spikes (Benchmark Lab) or your real workload's runtime, several runs each, with `grep thp /proc/vmstat` for activity.",
-		Category: CatMemory, Tier: TierAdvanced, Risk: RiskLow, Scope: ScopeUntilBoot,
+		Category: CatMemory, Tier: TierAdvanced, Risk: RiskMedium, Scope: ScopeUntilBoot,
 	}, "transparent huge pages", "thp", "/sys/kernel/mm/transparent_hugepage/enabled", thpOptions, resets)
 	t.fromFile = func(_, raw string) string { return privilege.ActiveChoice(raw) }
 	return t
@@ -392,7 +392,7 @@ func AMDGPUPerformanceLevel() Tweak {
 		Summary:  "Hold an AMD graphics card at high clocks so games wait less for it to speed up.",
 		Details:  "Writes power_dpm_force_performance_level for each amdgpu card. 'auto' lets the driver scale clocks with load, which can lag at the start of heavy frames; 'high' pins the top state.",
 		Helps:    "AMD GPU gamers on a desktop or plugged-in laptop who see ramp-up stutter.",
-		Tradeoff: "Much higher idle power, heat and fan noise while it is set; it does not raise the card's maximum, only removes the wait to reach it. Revert it when you stop gaming.",
+		Tradeoff: "Much higher idle power, heat and fan noise while it is set, and the card runs hot for as long as you leave it on. The card keeps its own temperature limits, but running hot all the time is a real cost. It does not raise the card's maximum speed, only removes the wait to reach it. Set it back when you stop gaming.",
 		Evidence: "Compare 1% low frame times in Benchmark Lab; a GPU already at full load in your game will not change.",
 		Category: CatGaming, Tier: TierSituational, Risk: RiskMedium, Scope: ScopeUntilBoot,
 		NeedsAuth: true, ParamName: "level", Options: amdDPMOptions,

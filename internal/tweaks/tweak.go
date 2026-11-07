@@ -100,22 +100,26 @@ type Option struct {
 }
 
 type Meta struct {
-	ID       string
-	Name     string
-	Summary  string // one plain-language sentence
-	Details  string // what exactly it changes and why it can help
-	Helps    string // who benefits and in which situation
-	Tradeoff string // the real cost
-	Evidence string // how to measure whether it helped
-	Category Category
-	Tier     Tier
-	Risk     Risk
-	Scope    Scope
+	ID        string
+	Name      string
+	Summary   string // one plain-language sentence
+	Details   string // what it does, in everyday words (see plain.go)
+	Technical string // the precise, technical description of the same thing
+	Helps     string // who benefits and in which situation
+	Tradeoff  string // the real cost
+	Evidence  string // how to measure whether it helped
+	Category  Category
+	Tier      Tier
+	Risk      Risk
+	Scope     Scope
 	// NeedsAuth is true when applying requires administrator permission.
 	NeedsAuth bool
 	// Disruptive is true when the change may briefly interrupt something (e.g. Wi-Fi).
 	Disruptive bool
-	Reboot     bool
+	// Reboot is true when the change only takes effect after a restart of the
+	// computer. It is shown in the description and as a pop-up after applying.
+	// Nothing in the built-in catalogue needs it: every tweak takes effect live.
+	Reboot bool
 	// Conflicts lists tweak IDs that must not be applied in the same transaction.
 	Conflicts []string
 	// ParamName/Options describe the single user-selectable parameter.
@@ -170,6 +174,9 @@ type Env struct {
 	Run    platform.Runner
 	Priv   privilege.Executor
 	Report detect.Report
+	// Home is the user's home directory, used to recognise per-user configuration
+	// (empty when unknown).
+	Home string
 }
 
 // Tweak is the optimisation contract.
@@ -327,6 +334,7 @@ func Default() *Registry {
 	r.Register(MousePoll())
 	r.Register(KeyboardPoll())
 	r.Register(GamepadPoll())
+	r.Register(PipeWireQuantum())
 	// Network
 	r.Register(WifiPowerSave{})
 	r.Register(DNSResolver{})
@@ -361,6 +369,7 @@ func Default() *Registry {
 	r.Register(AddRandom())
 	r.Register(DirtyWriteback())
 	r.Register(WritebackTiming())
+	r.Register(Watchers())
 	// Gaming & graphics
 	r.Register(MaxMapCount())
 	r.Register(SplitLockMitigate())
@@ -371,6 +380,7 @@ func Default() *Registry {
 	r.Register(HyprEffects())
 	r.Register(HyprTearing())
 	r.Register(HyprDirectScanout())
+	r.Register(HyprVRR())
 	r.Register(GnomeAnimations())
 	return r
 }

@@ -5,9 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"path"
 	"regexp"
 	"sort"
 	"strings"
+
+	"github.com/mttcn83/turboshift/internal/platform"
 )
 
 // Desktop tweaks change per-user compositor / toolkit settings through the
@@ -33,7 +36,7 @@ type cmdTweak struct {
 	warn    []string
 }
 
-func (c cmdTweak) Meta() Meta { return c.meta }
+func (c cmdTweak) Meta() Meta { return plained(c.meta) }
 
 func (c cmdTweak) readKeys(ctx context.Context, env Env, keys []string) (State, error) {
 	cur := State{}
@@ -55,7 +58,7 @@ func (c cmdTweak) Assess(ctx context.Context, env Env) Assessment {
 	if err != nil {
 		return Assessment{Reason: err.Error()}
 	}
-	return Assessment{Available: true, Current: cur, Options: c.opts}
+	return Assessment{Available: true, Current: cur, Options: plainOpts(c.meta.ID, c.opts)}
 }
 
 func (c cmdTweak) Read(ctx context.Context, env Env, want State) (State, error) {
@@ -133,10 +136,20 @@ func (c cmdTweak) Restore(ctx context.Context, env Env, p Plan) error {
 
 var hyprVal = regexp.MustCompile(`^[0-9]{1,2}$`)
 
+// hyprLuaConfig is the file a Lua-configured Hyprland (0.55 and newer) loads.
+// Such a Hyprland answers `hyprctl keyword` with "unknown request", so a
+// runtime change is impossible; say so instead of offering a switch that fails.
+const hyprLuaConfig = ".config/hypr/hyprland.lua"
+
 func hyprGate(keys ...string) func(context.Context, Env) string {
 	return func(ctx context.Context, env Env) string {
 		if !env.Run.Has("hyprctl") {
 			return "Hyprland's hyprctl is not installed."
+		}
+		if env.Home != "" {
+			if _, ok := platform.ReadTrim(env.FS, path.Join(env.Home, hyprLuaConfig)); ok {
+				return "Your Hyprland is configured with Lua (hyprland.lua), which does not accept runtime changes from outside. Put this setting in hyprland.lua instead."
+			}
 		}
 		for _, k := range keys {
 			if _, err := hyprRead(ctx, env, k); err != nil {
@@ -147,6 +160,8 @@ func hyprGate(keys ...string) func(context.Context, Env) string {
 	}
 }
 
+// hyprRead returns an option as "0"/"1" or its integer. Hyprland prints its
+// on/off options as {"bool": true} and its numbers as {"int": 2}.
 func hyprRead(ctx context.Context, env Env, key string) (string, error) {
 	res, err := env.Run.Run(ctx, "hyprctl", "getoption", key, "-j")
 	if err != nil {
@@ -155,11 +170,20 @@ func hyprRead(ctx context.Context, env Env, key string) (string, error) {
 	var o struct {
 		Option string `json:"option"`
 		Int    *int64 `json:"int"`
+		Bool   *bool  `json:"bool"`
 	}
-	if err := json.Unmarshal([]byte(res.Stdout), &o); err != nil || o.Int == nil || o.Option != key {
+	if err := json.Unmarshal([]byte(res.Stdout), &o); err != nil || o.Option != key {
 		return "", errors.New("unexpected hyprctl reply")
 	}
-	return fmt.Sprint(*o.Int), nil
+	switch {
+	case o.Int != nil:
+		return fmt.Sprint(*o.Int), nil
+	case o.Bool != nil && *o.Bool:
+		return "1", nil
+	case o.Bool != nil:
+		return "0", nil
+	}
+	return "", errors.New("unexpected hyprctl reply")
 }
 
 func hyprWrite(allowed ...string) func(context.Context, Env, string, string) error {
@@ -175,7 +199,9 @@ func hyprWrite(allowed ...string) func(context.Context, Env, string, string) err
 		if err != nil {
 			return fmt.Errorf("hyprctl keyword %s: %w", key, err)
 		}
-		if got := strings.TrimSpace(res.Stdout); got != "ok" {
+		if got := strings.TrimSpace(res.Stdout); got == "unknown request" {
+			return fmt.Errorf("hyprctl keyword %s: this Hyprland does not accept runtime keywords (Lua configuration); nothing was changed", key)
+		} else if got != "ok" {
 			return fmt.Errorf("hyprctl keyword %s: %s", key, got)
 		}
 		return nil

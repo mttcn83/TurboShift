@@ -43,7 +43,8 @@ Diagnose (read-only, no root needed)
   status                         one-screen summary and pending recovery
 
 Optimize (reversible; every change is journaled first)
-  tweaks list [--all]            what can be changed on this PC (--all: and why not the rest)
+  tweaks list [filters]          what can be changed on this PC (--all: and why not the rest;
+                                 --suggested --tier --max-risk --category --no-password, or words to search)
   tweaks show <id>               details, risks, how to measure it
   apply <id>=<value>... [--dry-run] [--yes]
   preset list | show <id> | apply <id> [--dry-run] [--yes]

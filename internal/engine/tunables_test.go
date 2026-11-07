@@ -203,7 +203,7 @@ func TestRecommendationsOnlyWhenTheEvidenceIsThere(t *testing.T) {
 	if a := tw.Assess(ctx, r.eng.Env); a.Recommend == nil || a.Recommend.Params["preference"] != "balance_performance" {
 		t.Errorf("AC + power-saving EPP should recommend balance_performance: %+v", a.Recommend)
 	}
-	for _, id := range []string{"net.tcp-cc", "mem.swappiness", "mem.thp", "io.scheduler", "net.qdisc", "game.max-map-count"} {
+	for _, id := range []string{"net.tcp-cc", "mem.swappiness", "mem.thp", "io.scheduler", "net.qdisc"} {
 		// These depend on the workload: they are offered, never pushed.
 		c := fileCase{}
 		for _, fc := range fileCases() {

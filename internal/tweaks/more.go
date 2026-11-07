@@ -43,20 +43,25 @@ func TCPNotsentLowat() Tweak {
 // TCPBuffers raises the ceiling for socket buffers.
 func TCPBuffers() Tweak {
 	const rm, wm = netp + "core/rmem_max", netp + "core/wmem_max"
+	const trm, twm = netp + "ipv4/tcp_rmem", netp + "ipv4/tcp_wmem"
+	// A normal program's TCP buffer is sized automatically up to the third
+	// number of tcp_rmem / tcp_wmem; core/rmem_max only caps programs that ask
+	// for a size themselves. Raising only the latter changes nothing for most
+	// downloads, so the large option raises all four.
 	presets := map[string]map[string]string{
-		"default": {"rmem": "212992", "wmem": "212992"},
-		"fast":    {"rmem": "16777216", "wmem": "16777216"},
+		"default": {"rmem": "212992", "wmem": "212992", "tcp_rmem": "4096 131072 6291456", "tcp_wmem": "4096 16384 4194304"},
+		"fast":    {"rmem": "16777216", "wmem": "16777216", "tcp_rmem": "4096 131072 16777216", "tcp_wmem": "4096 16384 16777216"},
 	}
 	opts := []Option{
-		{"default", "Kernel default (208 KiB)", "Fine for most home connections."},
-		{"fast", "Large (16 MiB)", "Lets fast or long-distance links (gigabit+, VPNs, far servers) reach full speed."},
+		{"default", "Usual limits", "Up to about 6 MiB per connection when receiving and 4 MiB when sending. Fine for most home connections."},
+		{"fast", "Large (16 MiB)", "Up to 16 MiB per connection, so one download can fill a fast or far-away link."},
 	}
 	m := Meta{
 		ID: "net.buffers", Name: "Faster downloads on fast or far links",
 		Summary:  "Allow bigger network buffers so a single download can fill a gigabit or long-distance connection.",
-		Details:  "Raises net.core.rmem_max and wmem_max to 16 MiB. TCP can only keep as much data in flight as its buffer allows, so on a fast link with noticeable latency a small ceiling caps the speed of one connection.",
+		Details:  "Raises the ceilings of the automatic TCP receive and send buffers (net.ipv4.tcp_rmem and tcp_wmem) and net.core.rmem_max / wmem_max to 16 MiB. TCP can only keep as much data in flight as its buffer allows (speed is at most buffer / round-trip time), so on a fast link to a distant server a small ceiling caps the speed of one connection: about 6 MiB limits a 100 ms path to roughly 500 Mbit/s.",
 		Helps:    "Gigabit and faster connections, VPNs, downloads from distant servers, large game or ISO downloads.",
-		Tradeoff: "Uses more memory when many large transfers run at once. No effect on a slow link or on game traffic.",
+		Tradeoff: "Each connection can now hold up to 16 MiB, so many large transfers at once can use a lot of memory (the buffers only grow as far as the link needs). Nothing changes on a slow link, a nearby server or game traffic, and it can add delay on a congested path if the buffers fill.",
 		Evidence: "Compare the throughput of one big download (or Network Doctor's load test) before and after, several runs.",
 		Category: CatNetwork, Tier: TierAdvanced, Risk: RiskLow, Scope: ScopeUntilBoot,
 		NeedsAuth: true, ParamName: "size", Options: opts,
@@ -67,13 +72,34 @@ func TCPBuffers() Tweak {
 		targets: func(env Env) map[string]string {
 			_, a := platform.ReadTrim(env.FS, rm)
 			_, b := platform.ReadTrim(env.FS, wm)
-			if a && b {
-				return map[string]string{"rmem": rm, "wmem": wm}
+			_, c := platform.ReadTrim(env.FS, trm)
+			_, d := platform.ReadTrim(env.FS, twm)
+			if a && b && c && d {
+				return map[string]string{"rmem": rm, "wmem": wm, "tcp_rmem": trm, "tcp_wmem": twm}
 			}
 			return nil
 		},
 		options:  func(Env, map[string]string) []Option { return opts },
+		fromFile: func(_, raw string) string { return privilege.SpaceSeparated(raw) },
 		warnings: []string{resets},
+		recommend: func(env Env, cur State) *Recommendation {
+			// Evidence: a wired link fast enough that the usual ceiling is the limit.
+			f := strings.Fields(cur["tcp_rmem"])
+			if len(f) != 3 {
+				return nil
+			}
+			ceil, err := strconv.ParseUint(f[2], 10, 64)
+			if err != nil || ceil >= 8<<20 {
+				return nil
+			}
+			for _, i := range env.Report.Network.Interfaces {
+				if i.Name == env.Report.Network.DefaultIface && i.Kind == "ethernet" && i.SpeedMbps != nil && *i.SpeedMbps >= 2500 {
+					return &Recommendation{Params: map[string]string{"size": "fast"},
+						Why: fmt.Sprintf("Your main connection (%s) runs at %d Mbit/s, but one download can use at most %d MiB of receive buffer, which limits a 100 ms path to roughly %d Mbit/s.", i.Name, *i.SpeedMbps, ceil>>20, ceil*8*10/1_000_000)}
+				}
+			}
+			return nil
+		},
 	}
 }
 
@@ -109,7 +135,7 @@ func TCPMTUProbing() Tweak {
 		Summary:  "Let TCP find a working packet size by itself when a VPN, tunnel or hotel network silently drops big packets.",
 		Details:  "Sets net.ipv4.tcp_mtu_probing. Some networks drop large packets without telling anyone, so a connection works for small requests (the page starts loading) and then hangs. With probing on, TCP notices and shrinks its packets.",
 		Helps:    "VPN, PPPoE, mobile tethering and public Wi-Fi users who see sites that half-load or SSH sessions that hang on large output.",
-		Tradeoff: "Almost none; on a healthy network it never triggers. 'Always' adds a few probe packets.",
+		Tradeoff: "Small. On a healthy network it normally never triggers. If it misjudges a limit it can shrink packets and lower speed; 'Always' sends a few extra test packets.",
 		Evidence: "Only matters if you have such hangs. If everything already works there is nothing to measure.",
 		Category: CatNetwork, Tier: TierSituational, Risk: RiskLow, Scope: ScopeUntilBoot,
 	}, "TCP MTU probing", "tcp_mtu_probing", netp+"ipv4/tcp_mtu_probing", mtuOptions, resets)
@@ -128,7 +154,7 @@ func TCPECN() Tweak {
 		Summary:  "Let routers tell your connection to slow down by marking packets instead of dropping them.",
 		Details:  "Sets net.ipv4.tcp_ecn. With ECN, a congested router sets a flag on packets instead of discarding them, so TCP backs off without having to re-send anything. It works best together with fq_codel or cake.",
 		Helps:    "Bufferbloat-fighting setups; busy home networks that use a modern router.",
-		Tradeoff: "A few old middleboxes mishandle ECN packets; Linux detects and falls back, but the first connection may be slower.",
+		Tradeoff: "A few old routers and firewalls mishandle ECN packets. Connections to some sites can then be slow to start or fail until the system retries without it. If a site will not load after enabling this, turn it off.",
 		Evidence: "Network Doctor's load test: compare latency under load and packet retransmissions with ECN on and off.",
 		Category: CatNetwork, Tier: TierAdvanced, Risk: RiskLow, Scope: ScopeUntilBoot,
 	}, "ECN", "tcp_ecn", netp+"ipv4/tcp_ecn", ecnOptions, resets)
@@ -191,7 +217,7 @@ func NMIWatchdog() Tweak {
 		Summary:  "Stop the kernel from waking every CPU once every few seconds just to check that it has not frozen.",
 		Details:  "Sets kernel.nmi_watchdog to 0. The watchdog fires a non-maskable interrupt on each core at a regular interval. That is useful for kernel debugging but costs a tiny amount of power and adds rare, very small latency blips.",
 		Helps:    "Laptops (longer idle sleep states) and latency-sensitive audio or gaming setups.",
-		Tradeoff: "The kernel can no longer report a hard CPU lock-up in the logs; the machine would simply stay frozen.",
+		Tradeoff: "The system can no longer report a hard processor lock-up in its logs; the machine would simply stay frozen with no clue why. You lose a diagnostic you may want when reporting a freeze.",
 		Evidence: "Powertop's wake-ups per second drop slightly; frame-time effect is too small to measure on most systems.",
 		Category: CatCPU, Tier: TierSituational, Risk: RiskLow, Scope: ScopeUntilBoot,
 	}, "NMI watchdog", "nmi_watchdog", "/proc/sys/kernel/nmi_watchdog", watchdogOptions, resets)
@@ -342,9 +368,9 @@ func MinFree() Tweak {
 		Summary:  "Hold back a bigger reserve of free memory so programs rarely have to wait for the kernel to clear space.",
 		Details:  "Sets vm.min_free_kbytes. When free memory falls to this level the kernel starts reclaiming immediately. A larger reserve makes sure there is room for sudden allocations (loading a level, starting a game) without a visible pause.",
 		Helps:    "Machines with 16 GB or more that stutter when RAM is nearly full of cache, and some 10 GbE setups.",
-		Tradeoff: "That reserve is not usable by programs. On a machine with little RAM it makes memory pressure worse.",
+		Tradeoff: "That reserve is not usable by programs. Too large for your RAM and the system hits memory pressure and out-of-memory kills sooner, so a wrong value makes things slower rather than faster. The larger options are meant for 16 GB or more.",
 		Evidence: "Doctor's memory pressure and `grep allocstall /proc/vmstat` growing under load show direct reclaim is happening.",
-		Category: CatMemory, Tier: TierAdvanced, Risk: RiskLow, Scope: ScopeUntilBoot,
+		Category: CatMemory, Tier: TierAdvanced, Risk: RiskMedium, Scope: ScopeUntilBoot,
 	}, "free-memory reserve", "min_free_kbytes", kb+"min_free_kbytes", minFreeOptions, resets)
 }
 
@@ -410,9 +436,9 @@ func WritebackTiming() Tweak {
 		Summary:  "Control how often unsaved data is pushed to disk, to avoid long pauses or save laptop battery.",
 		Details:  "Sets vm.dirty_writeback_centisecs and vm.dirty_expire_centisecs. The kernel wakes up on the interval and writes data that has been waiting longer than the age. Frequent small writes avoid big flush storms; infrequent ones let the disk sleep longer.",
 		Helps:    "Smooth: desktops that stall on big copies. Relaxed: battery-powered machines with SSDs.",
-		Tradeoff: "Relaxed loses up to a minute of unsaved data on a power cut or crash; Smooth wakes the disk more often.",
+		Tradeoff: "Relaxed lets data wait up to 60 s before it is written, so a power cut, flat battery or crash can lose the last minute of saves and downloads (or leave a file cut short). Smooth wakes the disk more often and uses a little more power.",
 		Evidence: "Smooth: watch disk stall pressure in Doctor during a large copy. Relaxed: compare idle wake-ups in powertop.",
-		Category: CatStorage, Tier: TierAdvanced, Risk: RiskLow, Scope: ScopeUntilBoot,
+		Category: CatStorage, Tier: TierAdvanced, Risk: RiskMedium, Scope: ScopeUntilBoot,
 		NeedsAuth: true, ParamName: "mode", Options: opts,
 	}
 	return fileTweak{
@@ -509,7 +535,7 @@ func AddRandom() Tweak {
 		Summary:  "Stop SSDs from contributing the timing of every request to the random-number pool, which is not needed.",
 		Details:  "Writes /sys/block/<disk>/queue/add_random = 0. Modern kernels get plenty of randomness elsewhere, so measuring each I/O is a small amount of pointless extra work.",
 		Helps:    "Fast SSDs and NVMe drives (the kernel already leaves it off for most of them, so this mainly checks and fixes it).",
-		Tradeoff: "None for modern kernels. Do not use on very old systems without a hardware random source.",
+		Tradeoff: "Negligible on a modern system with a normal source of randomness. Do not use it on very old systems that have none.",
 		Evidence: "Gain is tiny (a few CPU cycles per request); you will not see it on a stopwatch.",
 		Category: CatStorage, Tier: TierAdvanced, Risk: RiskLow, Scope: ScopeUntilBoot,
 	}, "disk entropy contribution", "add_random", addRandomOptions, resets)

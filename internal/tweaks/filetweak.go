@@ -43,7 +43,7 @@ type fileTweak struct {
 	what string
 }
 
-func (f fileTweak) Meta() Meta { return f.meta }
+func (f fileTweak) Meta() Meta { return plained(f.meta) }
 
 func (f fileTweak) to(key, v string) string {
 	if f.toFile != nil {
@@ -93,9 +93,11 @@ func (f fileTweak) Assess(_ context.Context, env Env) Assessment {
 	if len(opts) == 0 {
 		return Assessment{Reason: "No alternative value is available on this system."}
 	}
-	a := Assessment{Available: true, Current: cur, Options: opts}
+	a := Assessment{Available: true, Current: cur, Options: plainOpts(f.meta.ID, opts)}
 	if f.recommend != nil {
 		a.Recommend = f.recommend(env, cur)
+	} else if s, ok := suggestions[f.meta.ID]; ok {
+		a.Recommend = s(env, cur)
 	}
 	return a
 }
@@ -187,9 +189,26 @@ func (f fileTweak) Apply(ctx context.Context, env Env, p Plan) error {
 	return f.write(ctx, env, p.After)
 }
 
-// Restore writes the original values back (idempotent, safe after a partial Apply).
+// Restore writes the original values back (idempotent, safe after a partial
+// Apply). Attributes that already hold their original value are not written:
+// after a half-finished Apply most of them were never touched, and rewriting
+// an untouched value that the kernel refuses to write (or that needs an
+// authorisation prompt) would turn a clean rollback into a failed one.
 func (f fileTweak) Restore(ctx context.Context, env Env, p Plan) error {
-	return f.write(ctx, env, p.Before)
+	need := State{}
+	if live, err := f.Read(ctx, env, p.Before); err == nil {
+		for k, v := range p.Before {
+			if live[k] != v {
+				need[k] = v
+			}
+		}
+	} else {
+		need = p.Before
+	}
+	if len(need) == 0 {
+		return nil
+	}
+	return f.write(ctx, env, need)
 }
 
 // ---- shared helpers -------------------------------------------------------
@@ -260,7 +279,7 @@ func CPUEnergyPreference() Tweak {
 			Helps:    "Anyone plugged in whose CPU still leans towards saving power; laptops and desktops with intel_pstate or amd-pstate.",
 			Tradeoff: "Favouring performance raises power draw, heat and fan noise, and shortens battery life. It does nothing for GPU- or network-bound work.",
 			Evidence: "Compare frame times (Benchmark Lab, ≥4 runs each). If a game is GPU-bound the result will not move; then revert.",
-			Category: CatCPU, Tier: TierSituational, Risk: RiskLow, Scope: ScopeUntilBoot,
+			Category: CatCPU, Tier: TierRecommended, Risk: RiskLow, Scope: ScopeUntilBoot,
 			NeedsAuth: true, ParamName: "preference", Options: eppOptions,
 		},
 		gate: func(env Env) string {
@@ -310,7 +329,7 @@ func CPUBoost() Tweak {
 			Helps:    "People whose turbo got switched off (by a script or a power tool); also anyone who wants to turn it off to cool a hot laptop.",
 			Tradeoff: "Boost raises temperature, fan noise and power draw. Turning it off is a legitimate way to cool a hot laptop; turning it on only helps if something turned it off.",
 			Evidence: "Watch clock speed and temperature on the Dashboard, and compare frame times in Benchmark Lab.",
-			Category: CatCPU, Tier: TierSituational, Risk: RiskLow, Scope: ScopeUntilBoot,
+			Category: CatCPU, Tier: TierRecommended, Risk: RiskLow, Scope: ScopeUntilBoot,
 			NeedsAuth: true, ParamName: "boost", Options: boostOptions,
 		},
 		gate: func(env Env) string { return powerOwner(env, "CPU boost") },
@@ -424,7 +443,7 @@ func TCPCongestion() Tweak {
 			Summary:  "Choose how downloads and web traffic react to lost packets and delay.",
 			Details:  "Sets the TCP congestion-control algorithm for new connections. BBR models the link instead of reacting only to loss, which often gives higher throughput on lossy or long-distance paths. Online games use UDP, which this does not touch.",
 			Helps:    "Wi-Fi, mobile, VPN and far-away servers; game launchers, large downloads and streaming.",
-			Tradeoff: "Only algorithms already loaded in your kernel are offered (load tcp_bbr first if BBR is missing). A change can make some links faster and others worse.",
+			Tradeoff: "Only methods your system has already loaded are offered (load tcp_bbr first if BBR is missing). BBR can take more than its fair share of a link that other devices use, and some versions resend a lot of data, so on a busy home network, VPN or lossy path it can make things worse instead of better.",
 			Evidence: "Network Doctor's download load test: compare throughput and latency under load before and after, over several runs.",
 			Category: CatNetwork, Tier: TierAdvanced, Risk: RiskLow, Scope: ScopeUntilBoot,
 			NeedsAuth: true, ParamName: "algorithm", Options: tcpOptions,
@@ -465,7 +484,7 @@ func Swappiness() Tweak {
 			Summary:  "Set how eagerly the kernel moves idle memory out to swap.",
 			Details:  "Sets vm.swappiness (0-200). Lower values keep program memory in RAM longer; high values (100-200) make sense when swap is fast compressed RAM (zram), because swapping is cheaper than dropping file cache. There is no best number for everyone, so nothing is recommended automatically.",
 			Helps:    "Desktops that hold many programs open; machines with zram or fast swap.",
-			Tradeoff: "Too low can cause stalls when memory finally runs short; too high on a slow disk makes the system swap needlessly.",
+			Tradeoff: "Too low and the system avoids swap until memory is almost gone, so freezes or out-of-memory kills can strike suddenly; too high on a slow disk and it swaps needlessly.",
 			Evidence: "Watch memory pressure (Doctor shows the kernel's own stall figures) during your real workload before and after.",
 			Category: CatMemory, Tier: TierAdvanced, Risk: RiskLow, Scope: ScopeUntilBoot,
 			NeedsAuth: true, ParamName: "swappiness", Options: swappinessOptions,

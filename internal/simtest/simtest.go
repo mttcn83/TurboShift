@@ -39,6 +39,12 @@ type Machine struct {
 	Radio          string // "on" | "off" as iw reports
 	ReapplyApplies bool   // does `device reapply` push the setting to the radio?
 
+	// PWQuantum is PipeWire's clock.force-quantum; "" means PipeWire is not running.
+	PWQuantum string
+
+	// HyprLua simulates a Lua-configured Hyprland (0.55+), which answers
+	// `hyprctl keyword` with "unknown request".
+	HyprLua bool
 	// Hypr holds Hyprland's integer options; nil means Hyprland is not running.
 	Hypr map[string]int
 	// GSettings holds org.gnome.desktop.interface keys ("true"/"false").
@@ -222,6 +228,18 @@ func (m *Machine) Run(_ context.Context, name string, args ...string) (platform.
 	case "iw":
 		return ok("Power save: " + m.Radio + "\n")
 
+	case "pw-metadata":
+		if m.PWQuantum == "" {
+			return bad("can't connect: Host is down")
+		}
+		if len(args) == 5 && args[4] != "" {
+			if r, e, f := fail("pw-set"); f {
+				return r, e
+			}
+			m.PWQuantum = args[4]
+		}
+		return ok("Found \"settings\" metadata 31\nupdate: id:0 key:'clock.force-quantum' value:'" + m.PWQuantum + "' type:''\n")
+
 	case "hyprctl":
 		if m.Hypr == nil {
 			return bad("Couldn't connect to Hyprland")
@@ -232,10 +250,17 @@ func (m *Machine) Run(_ context.Context, name string, args ...string) (platform.
 			if !found {
 				return ok("no such option\n")
 			}
-			return ok(fmt.Sprintf(`{"option": %q, "int": %d, "float": %d.000000, "str": "[[EMPTY]]", "set": true}`+"\n", args[1], v, v))
+			// Real Hyprland prints on/off options as {"bool": ...}, numbers as {"int": ...}.
+			if strings.HasSuffix(args[1], ":enabled") || strings.HasSuffix(args[1], "allow_tearing") {
+				return ok(fmt.Sprintf(`{"option": %q, "bool": %t, "set": true }`+"\n", args[1], v != 0))
+			}
+			return ok(fmt.Sprintf(`{"option": %q, "int": %d, "set": false }`+"\n", args[1], v))
 		case "keyword":
 			if r, e, f := fail("hypr-keyword"); f {
 				return r, e
+			}
+			if m.HyprLua {
+				return ok("unknown request\n")
 			}
 			if _, found := m.Hypr[args[1]]; !found {
 				return ok("config option <" + args[1] + "> does not exist\n")

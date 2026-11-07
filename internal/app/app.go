@@ -75,7 +75,7 @@ func (a *App) Priv() privilege.Executor {
 
 // Env builds the tweak environment for a detection report.
 func (a *App) Env(rep detect.Report) tweaks.Env {
-	return tweaks.Env{FS: a.FS, Run: a.Run, Priv: a.Priv(), Report: rep}
+	return tweaks.Env{FS: a.FS, Run: a.Run, Priv: a.Priv(), Report: rep, Home: a.Home}
 }
 
 // Engine builds a transaction engine bound to a report.

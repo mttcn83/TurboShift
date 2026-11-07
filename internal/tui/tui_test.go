@@ -733,7 +733,7 @@ func TestOptimizerCategoryFilterCycles(t *testing.T) {
 			t.Fatal("mixed categories under a filter")
 		}
 	}
-	r.wantText("category: " + string(cat))
+	r.wantText("showing: " + string(cat))
 	r.press("esc")
 	if len(r.m.visibleTweaks()) != all {
 		t.Fatal("Esc should show every category again")
@@ -760,5 +760,57 @@ func (fakeNet) Load(context.Context, string, bool) (float64, error) { return 100
 func init() {
 	netDeps = func(fs platform.FS, run platform.Runner) diagnostics.NetDeps {
 		return diagnostics.NetDeps{Pinger: fakeNet{}, DNS: fakeNet{}, Loader: fakeNet{}, FS: fs, Run: run}
+	}
+}
+
+// rebooter marks one real tweak as needing a restart, to test the pop-up
+// without inventing a catalogue entry that does.
+type rebooter struct{ tweaks.Tweak }
+
+func (r rebooter) Meta() tweaks.Meta { m := r.Tweak.Meta(); m.Reboot = true; return m }
+
+func TestRestartPopupAppearsOnlyWhenNeeded(t *testing.T) {
+	for _, needs := range []bool{false, true} {
+		mach := simtest.New()
+		mach.PPDProfile = "power-saver"
+		r := newRigWithMachine(t, mach, func(a *app.App) {
+			if !needs {
+				return
+			}
+			reg := tweaks.NewRegistry()
+			for _, tw := range tweaks.Default().All() {
+				if tw.Meta().ID == "power.profile" {
+					tw = rebooter{tw}
+				}
+				reg.Register(tw)
+			}
+			a.Reg = reg
+		})
+		r.press("o")
+		if needs {
+			r.wantText("Needs a restart of your computer")
+		}
+		r.press("enter")
+		r.wantText("Applied and verified")
+		got := strings.Contains(r.text(), "Restart your computer for these to take effect")
+		if got != needs {
+			t.Fatalf("needs restart = %v but the pop-up shown = %v:\n%s", needs, got, r.text())
+		}
+		if needs && r.m.modal.title != "Restart needed" {
+			t.Fatalf("title = %q", r.m.modal.title)
+		}
+	}
+}
+
+func TestApplyButtonActsOnTheSettingUnderTheCursor(t *testing.T) {
+	r := newRig(t)
+	r.press("3")
+	r.wantText("Apply this setting")
+	r.press("a") // nothing ticked: applies the item under the cursor
+	r.wantText("Review before applying")
+	r.wantText("Cost:")
+	r.press("esc")
+	if r.calledSet() || len(r.snapshots()) != 0 {
+		t.Fatal("previewing must not change anything")
 	}
 }

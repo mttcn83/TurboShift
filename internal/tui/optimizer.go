@@ -6,6 +6,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/mttcn83/turboshift/internal/engine"
 	"github.com/mttcn83/turboshift/internal/tweaks"
 )
 
@@ -16,6 +17,9 @@ type optState struct {
 	top     int
 	search  textInput
 	cat     tweaks.Category // "" = all categories
+	tier    tweaks.Tier     // "" = all tiers
+	view    tweaks.View     // all | works here | suggested for this PC
+	noAdmin bool            // only changes that need no password
 	dscroll int             // scroll offset of the details pane
 }
 
@@ -154,21 +158,50 @@ func (m *Model) openPresets() {
 	m.modal = md
 }
 
-// visibleTweaks is the catalog filtered by the search box.
+// filter is the catalog's current narrowing: search box, category, tier, view.
+func (m *Model) filter() tweaks.Filter {
+	return tweaks.Filter{Query: m.opt.search.val, Category: m.opt.cat, Tier: m.opt.tier, View: m.opt.view, NoAdmin: m.opt.noAdmin}
+}
+
+// visibleTweaks is the catalog after the filters.
 func (m *Model) visibleTweaks() []tweaks.Tweak {
-	q := strings.ToLower(strings.TrimSpace(m.opt.search.val))
+	f := m.filter()
 	var out []tweaks.Tweak
 	for _, t := range m.app.Reg.All() {
-		mt := t.Meta()
-		hay := strings.ToLower(mt.ID + " " + mt.Name + " " + mt.Summary + " " + string(mt.Category) + " " + string(mt.Tier) + " " + mt.Risk.String())
-		if m.opt.cat != "" && mt.Category != m.opt.cat {
-			continue
-		}
-		if q == "" || strings.Contains(hay, q) {
+		if f.Match(t.Meta(), m.assess[t.Meta().ID], m.scanned) {
 			out = append(out, t)
 		}
 	}
 	return out
+}
+
+// cycleTier steps through all -> recommended -> situational -> advanced.
+func (m *Model) cycleTier() {
+	order := []tweaks.Tier{"", tweaks.TierRecommended, tweaks.TierSituational, tweaks.TierAdvanced}
+	for i, t := range order {
+		if t == m.opt.tier {
+			m.opt.tier = order[(i+1)%len(order)]
+			break
+		}
+	}
+	m.opt.cursor, m.opt.top, m.opt.dscroll = 0, 0, 0
+}
+
+// cycleView steps through all -> works on this PC -> suggested for this PC.
+func (m *Model) cycleView() {
+	order := []tweaks.View{tweaks.ViewAll, tweaks.ViewAvailable, tweaks.ViewSuggested}
+	for i, v := range order {
+		if v == m.opt.view {
+			m.opt.view = order[(i+1)%len(order)]
+			break
+		}
+	}
+	m.opt.cursor, m.opt.top, m.opt.dscroll = 0, 0, 0
+}
+
+func (m *Model) clearFilters() {
+	m.opt.search.val, m.opt.cat, m.opt.tier, m.opt.view, m.opt.noAdmin = "", "", "", tweaks.ViewAll, false
+	m.opt.cursor, m.opt.top, m.opt.dscroll = 0, 0, 0
 }
 
 // selectTweak ticks a tweak and chooses the value a Doctor finding suggested.
@@ -215,14 +248,26 @@ func (m *Model) keyOptimizer(msg tea.KeyPressMsg) (tea.Cmd, bool) {
 	case "c":
 		m.cycleCategory()
 		return nil, true
-	case "esc":
-		if m.opt.cat != "" && m.opt.search.val == "" {
-			m.opt.cat, m.opt.cursor, m.opt.top = "", 0, 0
+	case "t":
+		m.cycleTier()
+		return nil, true
+	case "v":
+		if !m.scanned {
+			m.notify(false, "Scan first (press r): TurboShift needs the scan to know what works on this PC.")
 			return nil, true
 		}
-		if m.opt.search.val != "" {
-			m.opt.search.val = ""
-			m.opt.cursor = 0
+		m.cycleView()
+		return nil, true
+	case "w":
+		m.opt.noAdmin = !m.opt.noAdmin
+		m.opt.cursor, m.opt.top, m.opt.dscroll = 0, 0, 0
+		return nil, true
+	case "f":
+		m.clearFilters()
+		return nil, true
+	case "esc":
+		if m.filter().Active() {
+			m.clearFilters()
 			return nil, true
 		}
 	case " ", "space":
@@ -323,7 +368,15 @@ func (m *Model) optAct(arg string) tea.Cmd {
 	case "apply":
 		reqs := m.selected()
 		if len(reqs) == 0 {
-			m.notify(false, "Nothing selected: move to an item and press Space to tick it.")
+			// Nothing ticked: "Apply" means the setting under the cursor.
+			if vis := m.visibleTweaks(); m.opt.cursor >= 0 && m.opt.cursor < len(vis) {
+				if r, ok := m.requestFor(vis[m.opt.cursor]); ok {
+					reqs = []engine.Request{r}
+				}
+			}
+		}
+		if len(reqs) == 0 {
+			m.notify(false, "This setting cannot be applied on this PC (see its details), and nothing else is ticked.")
 			return nil
 		}
 		return m.previewCmd(reqs)
@@ -333,8 +386,63 @@ func (m *Model) optAct(arg string) tea.Cmd {
 		m.cycleCategory()
 	case "presets":
 		m.openPresets()
+	case "tier":
+		m.cycleTier()
+	case "view":
+		if !m.scanned {
+			m.notify(false, "Scan first (press r): TurboShift needs the scan to know what works on this PC.")
+			return nil
+		}
+		m.cycleView()
+	case "admin":
+		m.opt.noAdmin = !m.opt.noAdmin
+		m.opt.cursor, m.opt.top, m.opt.dscroll = 0, 0, 0
+	case "clear":
+		m.clearFilters()
 	}
 	return nil
+}
+
+// filterChips is the clickable row that narrows the catalog. Each chip shows
+// its current value, so the row doubles as a readout of what is filtered.
+func (m *Model) filterChips(w int) []string {
+	or := func(s, def string) string {
+		if s == "" {
+			return def
+		}
+		return s
+	}
+	view := map[tweaks.View]string{tweaks.ViewAll: "everything", tweaks.ViewAvailable: "works here", tweaks.ViewSuggested: "suggested"}[m.opt.view]
+	pw := "any"
+	if m.opt.noAdmin {
+		pw = "none needed"
+	}
+	chips := []struct{ label, act string }{
+		{"Show: " + view + " (v)", "opt:view"},
+		{"Tier: " + or(string(m.opt.tier), "all") + " (t)", "opt:tier"},
+		{"Category: " + or(string(m.opt.cat), "all") + " (c)", "opt:cat"},
+		{"Password: " + pw + " (w)", "opt:admin"},
+	}
+	if m.filter().Active() {
+		chips = append(chips, struct{ label, act string }{"Clear (f)", "opt:clear"})
+	}
+	line, x := " ", 1
+	for _, c := range chips {
+		txt := "[ " + c.label + " ]"
+		if x+vw(txt) > w-1 {
+			break
+		}
+		active := !strings.Contains(c.label, ": all") && !strings.Contains(c.label, "everything") && !strings.Contains(c.label, ": any")
+		if c.act == "opt:clear" || active {
+			line += m.th.Sel(txt)
+		} else {
+			line += m.th.Bold(txt)
+		}
+		m.addHit(x, bodyY+1, vw(txt), 1, c.act)
+		line += " "
+		x += vw(txt) + 1
+	}
+	return []string{line}
 }
 
 func (m *Model) viewOptimizer(w, h int) []string {
@@ -351,12 +459,14 @@ func (m *Model) viewOptimizer(w, h int) []string {
 		}
 	case m.opt.search.val != "":
 		head += "   " + m.th.Accent("filter:") + " " + m.opt.search.val + m.th.Dim("  (Esc clears)")
-	case m.opt.cat != "":
-		head += "   " + m.th.Accent("category: "+string(m.opt.cat)) + m.th.Dim("  (c next · Esc all)")
+	case m.filter().Active():
+		head += "   " + m.th.Accent("showing: "+m.filter().Describe()) + m.th.Dim("  (f or Esc clears)")
 	default:
 		head += m.th.Dim("   REC recommended · SIT situational · ADV advanced · every change is previewed")
 	}
-	out = append(out, head, "")
+	out = append(out, head)
+	out = append(out, m.filterChips(w)...)
+	out = append(out, "")
 	if !m.scanned {
 		out = append(out, " "+m.th.Warn("Not scanned yet.")+" TurboShift needs a scan to know which tweaks apply here. "+m.th.Sel("[ Scan now (r) ]"))
 		m.addHit(1, bodyY+len(out)-1, w-1, 1, "opt:scan")
@@ -380,7 +490,11 @@ func (m *Model) viewOptimizer(w, h int) []string {
 	m.opt.top = scrollWindow(m.opt.cursor, m.opt.top, max(1, rows), len(vis))
 	var lb []string
 	if len(vis) == 0 {
-		lb = append(lb, m.th.Dim("No optimization matches \""+m.opt.search.val+"\"."))
+		msg := "Nothing matches these filters. Press f to clear them."
+		if m.opt.view == tweaks.ViewSuggested && m.opt.search.val == "" && m.opt.cat == "" && m.opt.tier == "" && !m.opt.noAdmin {
+			msg = "Nothing is suggested for this PC right now: no reading points at a setting worth changing. Press f to see everything."
+		}
+		lb = append(lb, wrapText(m.th.Dim(msg), max(10, listW-4))...)
 	}
 	inner := listW - 4
 	for i := m.opt.top; i < min(len(vis), m.opt.top+rows); i++ {
@@ -430,7 +544,7 @@ func (m *Model) viewOptimizer(w, h int) []string {
 		m.addHit(1, bodyY+len(out)+1+len(lb), 4, 1, fmt.Sprintf("opt:tog:%d", i))
 		lb = append(lb, line)
 	}
-	title := fmt.Sprintf("Catalog (%d)", len(vis))
+	title := fmt.Sprintf("Catalog (%d of %d)", len(vis), len(m.app.Reg.All()))
 	if len(vis) > 0 && m.opt.cat == "" {
 		title += " · " + string(vis[m.opt.cursor].Meta().Category)
 	}
@@ -469,8 +583,8 @@ func (m *Model) viewOptimizer(w, h int) []string {
 	by := bodyY + len(out)
 	pb, cb := "[ Presets (p) ]", "[ Category (c) ]"
 	if n == 0 {
-		btn = "[ Preview & apply (a) ]"
-		out = append(out, " "+m.th.Dim(btn)+" "+m.th.Bold(pb)+" "+m.th.Bold(cb)+m.th.Dim("  Space ticks an item · ←/→ changes its option"))
+		btn = "[ Apply this setting (a) ]"
+		out = append(out, " "+m.th.Dim(btn)+" "+m.th.Bold(pb)+" "+m.th.Bold(cb)+m.th.Dim("  Space ticks several · ←/→ changes the option · you review first"))
 	} else {
 		out = append(out, " "+m.th.Sel(btn)+" "+m.th.Bold(pb)+" "+m.th.Bold(cb)+m.th.Dim("  nothing changes until you confirm"))
 	}
@@ -488,6 +602,9 @@ func (m *Model) tweakDetail(t tweaks.Tweak, w int) []string {
 	d = append(d, m.th.Dim(fmt.Sprintf("%s · %s · risk %s · lasts: %s", mt.Category, mt.Tier, mt.Risk, mt.Scope)))
 	if mt.NeedsAuth {
 		d = append(d, m.th.Dim("Needs administrator approval when applied."))
+	}
+	if mt.Reboot {
+		d = append(d, m.th.Warn("Needs a restart of your computer to take effect."))
 	}
 	d = append(d, "")
 	d = append(d, wrapText(mt.Summary, w)...)
@@ -530,5 +647,11 @@ func (m *Model) tweakDetail(t tweaks.Tweak, w int) []string {
 	d = append(d, wrapText(mt.Tradeoff, w)...)
 	d = append(d, "", m.th.Bold("How to check it helped"))
 	d = append(d, wrapText(mt.Evidence, w)...)
+	if mt.Technical != "" && mt.Technical != mt.Details {
+		d = append(d, "", m.th.Dim("Technical details"))
+		for _, l := range wrapText(mt.Technical, w) {
+			d = append(d, m.th.Dim(l))
+		}
+	}
 	return d
 }

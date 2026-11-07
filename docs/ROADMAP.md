@@ -4,7 +4,7 @@ Nothing below exists today; the app does not pretend otherwise. Each item must c
 
 ## Optimizations (candidates)
 
-The first 54 are shipped (see the README). Still candidates:
+The first 57 are shipped (see the README). Still candidates:
 
 - Deliberately **not** planned: disabling CPU vulnerability mitigations (a real security regression for a few percent), hosts-file ad/tracker blocking (a different tool's job, and it edits system files), and Windows-only ideas with no Linux equivalent (MSI mode, device affinities, VBS/Hyper-V, large-send-offload toggles on NICs that Linux already tunes per driver).
 - KDE Plasma animation/latency settings (needs a verified reload path; GNOME and Hyprland are covered).

@@ -60,7 +60,7 @@ func New() *Machine {
 		Tools: map[string]bool{"systemctl": true, "powerprofilesctl": true, "nmcli": true, "iw": true, "busctl": true, "pkexec": true},
 		PPD:   true, PPDProfile: "balanced", PPDProfiles: []string{"performance", "balanced", "power-saver"},
 		OtherMgrs: map[string]bool{},
-		NM:        true, WifiUUID: "049d7dd4-b361-44b1-8e51-70ac8f2e2a81", Iface: "wlp108s0",
+		NM:        true, WifiUUID: "00000000-0000-4000-8000-000000000001", Iface: "wlp3s0",
 		NMPowersave: "default", Radio: "on", ReapplyApplies: true, IgnoreAutoDNS: "no",
 		Fail: map[string]error{},
 	}
@@ -74,8 +74,8 @@ func New() *Machine {
 		f.Set(p+"scaling_available_governors", "performance powersave\n")
 	}
 	f.Set("/sys/class/power_supply/ADP0/type", "Mains\n").Set("/sys/class/power_supply/ADP0/online", "1\n")
-	f.Set("/proc/net/route", "Iface\tDestination\tGateway\tFlags\tRefCnt\tUse\tMetric\tMask\nwlp108s0\t00000000\t0101A8C0\t0003\t0\t0\t600\t00000000\n")
-	f.Set("/sys/class/net/wlp108s0/operstate", "up\n").Set("/sys/class/net/wlp108s0/wireless/x", "")
+	f.Set("/proc/net/route", "Iface\tDestination\tGateway\tFlags\tRefCnt\tUse\tMetric\tMask\nwlp3s0\t00000000\t0101A8C0\t0003\t0\t0\t600\t00000000\n")
+	f.Set("/sys/class/net/wlp3s0/operstate", "up\n").Set("/sys/class/net/wlp3s0/wireless/x", "")
 	f.Set("/etc/resolv.conf", "nameserver 192.168.1.1\n")
 	f.Set("/proc/meminfo", "MemTotal: 16000000 kB\nMemAvailable: 8000000 kB\nSwapTotal: 0 kB\nSwapFree: 0 kB\n")
 	return m

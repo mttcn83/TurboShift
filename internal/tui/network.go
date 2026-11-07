@@ -128,7 +128,7 @@ func (m *Model) startNet() tea.Cmd {
 	go func() {
 		defer close(ch)
 		defer cancel()
-		res := diagnostics.CollectNetwork(ctx, rep, opt, diagnostics.RealNetDeps(a.FS, a.Run), func(s string) { ch <- stageMsg(s) })
+		res := diagnostics.CollectNetwork(ctx, rep, opt, netDeps(a.FS, a.Run), func(s string) { ch <- stageMsg(s) })
 		ch <- netDoneMsg{res, ctx.Err() != nil}
 	}()
 	return tea.Batch(cmd, listen(ch))
@@ -186,6 +186,11 @@ func (m *Model) viewNetwork(w, h int) []string {
 	c = append(c, m.field("DNS lookup name", &m.net.lookup, "l", "(default)"))
 	if m.net.external {
 		c = append(c, m.field("Download URL", &m.net.loadURL, "u", "(optional: measures lag under load)"))
+	}
+	if m.net.external {
+		for _, l := range wrapText(diagnostics.ExternalNotice, w-6) {
+			c = append(c, m.th.Dim(l))
+		}
 	}
 	c = append(c, m.th.Dim("Nothing is sent until you press run. No data leaves your machine except these probes."))
 	out = append(out, m.box("Consent & settings", c, w, 0, !m.net.external)...)
@@ -283,3 +288,6 @@ func (m *Model) netResultLines(w int) []string {
 	l = append(l, "", m.th.Dim("ICMP can be rate-limited by some routers: treat a single short run as indicative, not proof."))
 	return l
 }
+
+// netDeps builds the network probes; tests replace it so they never touch the network.
+var netDeps = diagnostics.RealNetDeps

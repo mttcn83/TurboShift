@@ -40,7 +40,7 @@ func (DNSResolver) Meta() Meta {
 		Summary:  "Use a different DNS service on this connection if your router's or ISP's is slow.",
 		Details:  "Sets the DNS servers (and turns off automatic ones) on the active NetworkManager connection and re-applies it to the adapter. DNS decides how quickly names like websites and game servers are looked up; it does not change the speed or ping of the connection itself. Only IPv4 servers are changed.",
 		Helps:    "Connections where Network Doctor shows slow or inconsistent DNS lookups.",
-		Tradeoff: "The resolver you pick sees every name you look up. A resolver closer to you can be faster, a farther one slower, and some networks (company, captive portal, local names) need their own DNS.",
+		Tradeoff: "The provider you pick receives every name you look up and your IP address, under its own privacy policy and terms; do not use it where a workplace, school or VPN requires its own DNS. A resolver closer to you can be faster, a farther one slower, and some networks (company, captive portal, local names) need their own DNS.",
 		Evidence: "Network Doctor's DNS timings: compare first-lookup and median times before and after, over several runs.",
 		Category: CatNetwork, Tier: TierSituational, Risk: RiskLow, Scope: ScopePersistent,
 		Disruptive: true, ParamName: "resolver", Options: dnsOptions,

@@ -16,6 +16,8 @@ import (
 	"github.com/mttcn83/turboshift/internal/app"
 	"github.com/mttcn83/turboshift/internal/benchmark"
 	"github.com/mttcn83/turboshift/internal/config"
+	"github.com/mttcn83/turboshift/internal/diagnostics"
+	"github.com/mttcn83/turboshift/internal/platform"
 	"github.com/mttcn83/turboshift/internal/privilege"
 	"github.com/mttcn83/turboshift/internal/simtest"
 	"github.com/mttcn83/turboshift/internal/snapshot"
@@ -741,5 +743,22 @@ func TestOptimizerCategoryFilterCycles(t *testing.T) {
 	}
 	if len(r.m.visibleTweaks()) != all {
 		t.Fatal("cycling past the last category should return to All")
+	}
+}
+
+// fakeNet answers every probe at once so TUI tests can never touch the network.
+type fakeNet struct{}
+
+func (fakeNet) Ping(_ context.Context, host string, n int, _ time.Duration) (diagnostics.PingStats, error) {
+	return diagnostics.PingStats{Target: host, Sent: n, Received: n, AvgMs: 5, P50Ms: 5, P95Ms: 6, MaxMs: 7, MinMs: 4}, nil
+}
+func (fakeNet) Time(context.Context, string, string) (time.Duration, error) {
+	return 8 * time.Millisecond, nil
+}
+func (fakeNet) Load(context.Context, string, bool) (float64, error) { return 100, nil }
+
+func init() {
+	netDeps = func(fs platform.FS, run platform.Runner) diagnostics.NetDeps {
+		return diagnostics.NetDeps{Pinger: fakeNet{}, DNS: fakeNet{}, Loader: fakeNet{}, FS: fs, Run: run}
 	}
 }

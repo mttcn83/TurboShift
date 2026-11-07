@@ -22,6 +22,7 @@ func cmdNetwork(ctx context.Context, a *app.App, args []string, o *out) int {
 	secs := fs.Int("load-seconds", 10, "duration of each load test")
 	asJSON := fs.Bool("json", false, "machine-readable output")
 	ssid := fs.Bool("include-ssid", false, "include your Wi-Fi network name in --json output")
+	redact := fs.Bool("redact", false, "with --json: hide private IP addresses, MAC addresses and network interface names")
 	if _, err := parse(fs, args); err != nil {
 		return ExitUsage
 	}
@@ -36,34 +37,27 @@ func cmdNetwork(ctx context.Context, a *app.App, args []string, o *out) int {
 	rep := a.Detect(ctx)
 	dests := diagnostics.PlanDestinations(rep, opt)
 	if !*asJSON {
-		o.heading("network doctor")
-		o.println("  This run will contact:")
-		for _, d := range dests {
-			tag := "local   "
-			if d.External {
-				tag = "external"
-			}
-			o.printf("    %s  %-24s %s\n", o.dim(tag), d.Host, o.dim(d.Purpose))
-		}
-		if !*ext {
-			o.printf("    %s\n", o.dim("(add --external to also test DNS and internet reachability)"))
-		}
+		printConsent(o, dests, *ext)
 		o.println()
 	}
 	var progress func(string)
 	if !*asJSON {
 		progress = func(s string) { o.printf("  %s %s…\n", o.dim("·"), s) }
 	}
-	res := diagnostics.CollectNetwork(ctx, rep, opt, diagnostics.RealNetDeps(a.FS, a.Run), progress)
+	res := diagnostics.CollectNetwork(ctx, rep, opt, netDeps(a.FS, a.Run), progress)
 
 	if *asJSON {
 		if !*ssid {
 			res.Link.SSID = ""
 		}
-		return o.json(struct {
+		doc := struct {
 			SchemaVersion int `json:"schema_version"`
 			diagnostics.NetReport
-		}{schemaVersion, res})
+		}{schemaVersion, res}
+		if *redact {
+			return o.jsonRedacted(doc, interfaceNames(rep.Network, res.Link.Iface))
+		}
+		return o.json(doc)
 	}
 	o.println()
 	l := res.Link
@@ -125,3 +119,25 @@ func speed(s *int) string {
 	}
 	return fmt.Sprintf("%d Mbit/s", *s)
 }
+
+// printConsent lists exactly which hosts a run contacts, and for external runs
+// who learns what.
+func printConsent(o *out, dests []diagnostics.Destination, external bool) {
+	o.heading("network doctor")
+	o.println("  This run will contact:")
+	for _, d := range dests {
+		tag := "local   "
+		if d.External {
+			tag = "external"
+		}
+		o.printf("    %s  %-24s %s\n", o.dim(tag), d.Host, o.dim(d.Purpose))
+	}
+	if !external {
+		o.printf("    %s\n", o.dim("(add --external to also test DNS and internet reachability)"))
+	} else {
+		o.printf("\n  %s\n", o.dim(wrap(diagnostics.ExternalNotice, 70, "  ")))
+	}
+}
+
+// netDeps builds the network probes; tests replace it so they never touch the network.
+var netDeps = diagnostics.RealNetDeps

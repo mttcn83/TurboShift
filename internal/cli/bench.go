@@ -182,6 +182,9 @@ func cmdGame(ctx context.Context, a *app.App, args []string, o *out) int {
 	switch args[0] {
 	case "options":
 		o.println(spec.Steam())
+		if spec.GameMode || spec.MangoHud {
+			fmt.Fprintln(o.err, "\n"+wrap(integrations.OverlayNotice, 76, ""))
+		}
 		return ExitOK
 	case "run":
 		if len(rest) == 0 {

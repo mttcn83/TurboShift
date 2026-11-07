@@ -2,7 +2,7 @@
 
 ## Reporting a vulnerability
 
-Please open a private security advisory on the repository (or email the maintainers listed there) rather than a public issue. Include the version (`turbo --version`), what you did, and what you expected. We aim to acknowledge within a few days.
+Please do not post vulnerability details in a public issue. Use the repository's *Security* tab → *Report a vulnerability* if it is offered; if it is not, open a public issue that says only "security report, please contact me" (no details) and the maintainers will arrange a private channel. Include the version (`turbo --version`), what you did, and what you expected. We aim to acknowledge within a few days.
 
 ## Threat model
 

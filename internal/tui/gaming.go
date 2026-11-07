@@ -144,6 +144,12 @@ func (m *Model) viewGaming(w, h int) []string {
 	res := []string{m.th.Dim("Steam: paste into a game's Properties " + m.gl.Arrow + " Launch Options")}
 	res = append(res, wrapText(cmd, w-6)...)
 	res = append(res, "", m.th.Dim("Outside Steam: ")+"turbo game run"+flagString(spec)+" -- <your command>")
+	if spec.GameMode || spec.MangoHud {
+		res = append(res, "")
+		for _, l := range wrapText(integrations.OverlayNotice, w-6) {
+			res = append(res, m.th.Dim(l))
+		}
+	}
 	out = append(out, m.box("Result", res, w, 0, false)...)
 	by := bodyY + len(out)
 	btn := "[ Copy launch options (c) ]"

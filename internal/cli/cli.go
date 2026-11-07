@@ -10,6 +10,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/mttcn83/turboshift"
 	"github.com/mttcn83/turboshift/internal/app"
 	"github.com/mttcn83/turboshift/internal/privilege"
 	"github.com/mttcn83/turboshift/internal/version"
@@ -61,6 +62,7 @@ Games
 
 Other
   completion bash|fish           print a tab-completion script for your shell
+  licenses                       the licence of TurboShift and of the software built into it
   --version, --help
 
 Exit codes: 0 ok · 1 error · 2 usage · 3 rolled back / partially restored
@@ -104,6 +106,10 @@ func Run(ctx context.Context, a *app.App, args []string, stdout, stderr io.Write
 		return cmdBenchmark(ctx, a, rest, o)
 	case "game":
 		return cmdGame(ctx, a, rest, o)
+	case "licenses", "license":
+		fmt.Fprintln(stdout, turboshift.License)
+		fmt.Fprintln(stdout, turboshift.ThirdPartyNotices)
+		return ExitOK
 	case "completion":
 		return cmdCompletion(rest, o)
 	case "__complete":

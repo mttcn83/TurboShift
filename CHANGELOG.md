@@ -8,6 +8,17 @@ First stable release. The 54 optimizations, presets and one-key goals from 0.3.0
 
 - Every `--json` document is now an object with `"schema_version": 1` and `snake_case` keys throughout. `tweaks list --json` and `preset list --json` used to print a bare array with `PascalCase` keys; they now print `{"schema_version":1,"tweaks":[...]}` / `{"schema_version":1,"presets":[...]}` with `id`, `name`, ... `network --json` destinations, `top_processes` and `benchmark compare --json` metrics were renamed the same way. Empty lists are `[]`, not `null`. `benchmark list --json` is new.
 
+**Legal and privacy audit**
+
+- `turbo licenses` and the new `THIRD_PARTY_NOTICES.md` now reproduce the Go licence text (it was only linked before) and the licence of every linked module, and both are built into the binary, so every copy of `turbo` carries the notices its licences require. A test fails if a linked module is missing.
+- `turbo doctor --json` / `network --json` leaked the router's address, DNS servers and every network interface name (VPN and Docker names included) while the README claimed they held no personal data. New `--redact` removes private IPs, MAC addresses and interface names; README now says to use it for bug reports.
+- Network Doctor consent (CLI and TUI) now says that every external host learns your public IP address, and that load-test URLs must be servers you own or whose terms allow it. PRIVACY.md is rewritten and accurate (it still described a single admin action and an earlier feature set).
+- Absolute performance promises ("instantly", "never wait", "fix crashes", "no input delay") rewritten to describe the mechanism; the README states there is no performance guarantee.
+- The DNS tweak's trade-off now says the provider receives your lookups and IP and that managed networks may forbid it; the Gaming screen and `turbo game options` warn that some online games' anti-cheat or terms restrict overlays and injected libraries.
+- Test fixtures no longer contain a real NetworkManager UUID or the author's network interface names.
+- New guard tests (`legal_test.go`): only the opt-in Network Doctor may open connections, no unreviewed URL in code, no remote resource (image, font, script, tracker) in any document, documents link only to reviewed hosts, no performance promises in tweak text, no personal data. CLI and TUI tests now use a fake network, so the test suite can never touch the network (a TUI soak run had been pinging a real address).
+- README: disclaimer expanded (no warranty, no performance promise, managed machines, online games, trademark acknowledgements); CONTRIBUTING states the licensing of contributions. SECURITY.md no longer points to a reporting feature that may be off. `govulncheck` is clean.
+
 **Fixed**
 
 - The "terminal too small" notice was one 79-column line, so it overflowed exactly the terminals it was meant for. It now wraps to the terminal and never draws more rows than exist. (Found by the new random-input torture test.)

@@ -4,7 +4,7 @@ From 1.0.0 TurboShift follows [semantic versioning](https://semver.org). This pa
 
 ## Stable (changes only in a new major version)
 
-**Commands and flags.** The command names, sub-commands and flags in `turbo --help`: `doctor`, `status`, `network`, `tweaks list|show`, `apply`, `preset list|show|apply`, `undo`, `snapshots list|show|restore|recover`, `benchmark …`, `game …`, `completion`. New commands and flags may be added in minor versions.
+**Commands and flags.** The command names, sub-commands and flags in `turbo --help`: `doctor`, `status`, `network`, `tweaks list|show`, `apply`, `preset list|show|apply`, `undo`, `snapshots list|show|restore|recover`, `benchmark …`, `game …`, `completion`, `licenses`. New commands and flags may be added in minor versions.
 
 **Tweak and preset IDs.** An ID such as `net.ecn` or `gaming` is never renamed or reused for something else. A tweak may be retired in a minor version (the engine then restores old restore points that mention it as "no longer known" instead of guessing).
 
@@ -23,7 +23,7 @@ From 1.0.0 TurboShift follows [semantic versioning](https://semver.org). This pa
 | `benchmark list --json` | `schema_version`, `runs[]` |
 | `benchmark compare A B --json` | `schema_version`, `a b overall summary metrics[] warnings` |
 
-Within a major version keys are only **added**, never renamed, removed or re-typed. Empty lists are `[]`, never `null`. Maps keyed by the tweak's own state names (`current`, `params`, `before`, `after`) can contain any key those tweaks use (for example `ipv4.dns`). Read unknown keys and values defensively.
+`doctor --json` and `network --json` accept `--redact`, which keeps the same shape but replaces private IP addresses, MAC addresses and interface names with placeholders. Within a major version keys are only **added**, never renamed, removed or re-typed. Empty lists are `[]`, never `null`. Maps keyed by the tweak's own state names (`current`, `params`, `before`, `after`) can contain any key those tweaks use (for example `ipv4.dns`). Read unknown keys and values defensively.
 
 **Restore points.** Files under `$XDG_STATE_HOME/turboshift/snapshots/` carry a `format` number (1) and a SHA-256 checksum. Every 1.x release restores every restore point written by any earlier release back to 0.1. A restore point written by a *newer* format is refused with a clear message instead of being half-read.
 

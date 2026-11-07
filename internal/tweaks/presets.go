@@ -54,8 +54,8 @@ var gamingItems = items(
 func Presets() []Preset {
 	return []Preset{
 		{
-			ID: "gaming", Key: "g", Headline: "Boost for gaming", Blurb: "Fast CPU/GPU, no input delay, fewer stutters", Name: "Gaming",
-			Summary: "Keep the CPU and GPU fast, remove input delay and avoid the kernel behaviours that cause game stutter.",
+			ID: "gaming", Key: "g", Headline: "Boost for gaming", Blurb: "Fast CPU/GPU, lower input delay, fewer stutters", Name: "Gaming",
+			Summary: "Keep the CPU and GPU fast, reduce input delay and avoid kernel behaviours that can cause game stutter.",
 			Best:    "A gaming session on a desktop or a plugged-in laptop.",
 			Cost:    "More heat, fan noise and power use while it is set. Everything resets at reboot, and `turbo snapshots restore` undoes it sooner.",
 			Items:   gamingItems,
@@ -80,7 +80,7 @@ func Presets() []Preset {
 			),
 		},
 		{
-			ID: "network", Key: "n", Headline: "Cut network lag", Blurb: "Low ping while downloading, faster connections", Name: "Network",
+			ID: "network", Key: "n", Headline: "Cut network lag", Blurb: "Lower ping while downloading, quicker connections", Name: "Network",
 			Summary: "Keep ping low while the connection is busy and make TCP traffic start and recover faster.",
 			Best:    "Online gaming and calls on a connection that is also used for downloads; Wi-Fi laptops.",
 			Cost:    "Wi-Fi power saving off uses more battery on laptops. Game traffic itself (UDP) is not changed.",

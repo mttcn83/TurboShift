@@ -194,7 +194,7 @@ func HyprEffects() Tweak {
 			ID: "desktop.hypr-effects", Name: "Plain, fast Hyprland (no animations, blur or shadows)",
 			Summary:  "Switch off window animations, background blur and drop shadows so the compositor does far less work per frame.",
 			Details:  "Uses `hyprctl keyword` to set animations:enabled, decoration:blur:enabled and decoration:shadow:enabled to 0. Blur is the most expensive effect: it re-renders what is behind every blurred window on every frame. Animations add delay between your action and the final picture.",
-			Helps:    "Integrated graphics, older GPUs, low-latency gaming on the desktop, and anyone who prefers instant window changes.",
+			Helps:    "Integrated graphics, older GPUs, low-latency gaming on the desktop, and anyone who prefers windows that appear without animation.",
 			Tradeoff: "The desktop looks flatter. Hyprland resets runtime keywords when its configuration is reloaded or on next login, so this is a per-session switch; edit hyprland.conf to make it permanent.",
 			Evidence: "Compare GPU load and frame times with the compositor under a game or video, several runs each.",
 			Category: CatDesktop, Tier: TierSituational, Risk: RiskLow, Scope: ScopeSession,
@@ -277,11 +277,11 @@ func gnomeRead(ctx context.Context, env Env, _ string) (string, error) {
 // GnomeAnimations toggles GTK/GNOME interface animations.
 func GnomeAnimations() Tweak {
 	const k = "enable-animations"
-	opts := onOff("Window, menu and workspace animations as designed.", "Instant window, menu and workspace changes.")
+	opts := onOff("Window, menu and workspace animations as designed.", "Window, menu and workspace changes without animation.")
 	return cmdTweak{
 		meta: Meta{
-			ID: "desktop.gnome-animations", Name: "Instant GNOME / GTK interface (no animations)",
-			Summary:  "Turn off GNOME and GTK animations so windows, menus and workspaces respond instantly.",
+			ID: "desktop.gnome-animations", Name: "GNOME / GTK without animations",
+			Summary:  "Turn off GNOME and GTK animations so windows, menus and workspaces respond without the animation delay.",
 			Details:  "Sets org.gnome.desktop.interface enable-animations through gsettings. Every animation adds tens to hundreds of milliseconds between your action and the finished screen, and costs GPU time on weak graphics.",
 			Helps:    "GNOME and GTK-app users on integrated graphics, remote desktops and anyone who finds animations slow.",
 			Tradeoff: "The interface feels abrupt. This is a normal GNOME setting, kept across logins until you change it back.",

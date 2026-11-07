@@ -50,11 +50,11 @@ func laptopFS() *platform.MemFS {
 	m.Set("/proc/self/mounts", "/dev/nvme0n1p2 / btrfs rw 0 0\n/dev/nvme0n1p2 /home btrfs rw 0 0\n/dev/nvme0n1p1 /boot vfat rw 0 0\ntmpfs /tmp tmpfs rw 0 0\n/dev/sdb1 /run/media/x ext4 rw 0 0\n")
 	m.SetStatfs("/", 1000, 100).SetStatfs("/home", 1000, 100).SetStatfs("/boot", 500, 400)
 	// Network
-	m.Set("/proc/net/route", "Iface\tDestination\tGateway\tFlags\tRefCnt\tUse\tMetric\tMask\nwlp108s0\t00000000\t0101A8C0\t0003\t0\t0\t600\t00000000\nenp109s0\t00000000\t0100000A\t0003\t0\t0\t100\t00000000\n")
+	m.Set("/proc/net/route", "Iface\tDestination\tGateway\tFlags\tRefCnt\tUse\tMetric\tMask\nwlp3s0\t00000000\t0101A8C0\t0003\t0\t0\t600\t00000000\nenp4s0\t00000000\t0100000A\t0003\t0\t0\t100\t00000000\n")
 	m.Set("/etc/resolv.conf", "# generated\nnameserver 127.0.0.53\noptions edns0\n")
-	m.Set("/sys/class/net/wlp108s0/operstate", "up\n").Set("/sys/class/net/wlp108s0/carrier", "1\n").Set("/sys/class/net/wlp108s0/wireless/x", "")
-	m.Set("/sys/class/net/wlp108s0/statistics/rx_errors", "7\n")
-	m.Symlink("../../../0000:6c:00.0", "/sys/class/net/wlp108s0/device")
+	m.Set("/sys/class/net/wlp3s0/operstate", "up\n").Set("/sys/class/net/wlp3s0/carrier", "1\n").Set("/sys/class/net/wlp3s0/wireless/x", "")
+	m.Set("/sys/class/net/wlp3s0/statistics/rx_errors", "7\n")
+	m.Symlink("../../../0000:6c:00.0", "/sys/class/net/wlp3s0/device")
 	m.Set("/sys/class/net/lo/operstate", "unknown\n")
 	m.Set("/sys/class/net/docker0/operstate", "up\n")
 	return m
@@ -71,7 +71,7 @@ func laptopRunner() *platform.FakeRunner {
 0000:01:00.0 "VGA compatible controller [0300]" "NVIDIA Corporation [10de]" "GB206M [GeForce RTX 5060 Max-Q / Mobile] [2d58]" -ra1
 0000:00:14.0 "USB controller [0c03]" "Intel Corporation [8086]" "USB 3.0 [7a60]"
 `})
-	r.On("iw dev wlp108s0 get power_save", platform.Reply{Stdout: "Power save: on\n"})
+	r.On("iw dev wlp3s0 get power_save", platform.Reply{Stdout: "Power save: on\n"})
 	r.Install("iw")
 	return r
 }
@@ -139,7 +139,7 @@ func TestProbeHybridLaptop(t *testing.T) {
 		t.Errorf("storage: %+v", rep.Storage)
 	}
 	n := rep.Network
-	if n.DefaultIface != "enp109s0" || n.Gateway != "10.0.0.1" {
+	if n.DefaultIface != "enp4s0" || n.Gateway != "10.0.0.1" {
 		t.Errorf("lowest-metric default route should win: %s %s", n.DefaultIface, n.Gateway)
 	}
 	if n.ResolverMode != "systemd-resolved" || !n.NetworkManager {
@@ -149,7 +149,7 @@ func TestProbeHybridLaptop(t *testing.T) {
 	for _, i := range n.Interfaces {
 		kinds[i.Name] = i.Kind
 	}
-	if kinds["wlp108s0"] != "wifi" || kinds["lo"] != "loopback" || kinds["docker0"] != "virtual" {
+	if kinds["wlp3s0"] != "wifi" || kinds["lo"] != "loopback" || kinds["docker0"] != "virtual" {
 		t.Errorf("iface kinds: %v", kinds)
 	}
 	if rep.HasTool("gamemoderun") || !rep.HasTool("iw") {

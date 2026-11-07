@@ -100,12 +100,12 @@ In the app press `p` in the Optimizer. From the shell: `turbo preset list`, `tur
 | `cpu.governor` | **CPU speed policy (governor)**: Tell every CPU core how eagerly to run fast. Offered only when no power manager is in charge. | advanced | yes | until reboot |
 | `cpu.epp` | **Make the CPU favour speed over saving power**: Tell the CPU's own speed controller to ramp up faster, or to save more power. | situational | yes | until reboot |
 | `cpu.boost` | **Let the CPU run faster than its base speed (turbo)**: Allow or forbid the CPU to run above its base clock. | situational | yes | until reboot |
-| `cpu.min-perf` | **Keep the CPU from idling low**: Raise the lowest speed the CPU is allowed to drop to, so it reacts instantly instead of ramping up. | situational | yes | until reboot |
-| `cpu.hwp-boost` | **Instant CPU boost after waiting**: Make the CPU jump to full speed the moment a program resumes after waiting on disk or network. | situational | yes | until reboot |
+| `cpu.min-perf` | **Keep the CPU from idling low**: Raise the lowest speed the CPU is allowed to drop to, so it reacts sooner instead of ramping up. | situational | yes | until reboot |
+| `cpu.hwp-boost` | **Faster CPU boost after waiting**: Make the CPU jump to full speed the moment a program resumes after waiting on disk or network. | situational | yes | until reboot |
 | `platform.profile` | **Laptop fan and power mode**: Switch the laptop firmware between quiet, balanced and performance modes. | advanced | yes | until reboot |
 | `cpu.autogroup` | **Keep the desktop smooth during heavy builds**: Give each terminal and session its own fair share of CPU, so one huge job cannot make the rest sluggish. | advanced | yes | until reboot |
 | `sys.watchdog` | **Turn off the CPU lock-up detector**: Stop the kernel from waking every CPU once every few seconds just to check that it has not frozen. | situational | yes | until reboot |
-| `pcie.aspm` | **Stop PCIe devices from dozing off (lower latency)**: Keep PCI Express links fully awake so NVMe drives, GPUs and network cards answer instantly. | advanced | yes | until reboot |
+| `pcie.aspm` | **Stop PCIe devices from dozing off (lower latency)**: Keep PCI Express links fully awake so NVMe drives, GPUs and network cards answer sooner. | advanced | yes | until reboot |
 | `usb.autosuspend` | **Stop USB devices from falling asleep**: Keep mice, keyboards and headsets awake so the first click or sound after a pause is not delayed. | situational | yes | until reboot |
 | `mem.stat-interval` | **Fewer background interruptions**: Make the kernel update its memory statistics less often, so it interrupts your CPU cores less. | situational | yes | until reboot |
 
@@ -145,8 +145,8 @@ In the app press `p` in the Optimizer. From the shell: `turbo preset list`, `tur
 | `mem.vfs-cache` | **Remember file locations longer**: Keep directory and file-name caches in memory longer, so repeated lookups are fast. | advanced | yes | until reboot |
 | `mem.compaction` | **Stop background memory tidying**: Stop the kernel from defragmenting memory in the background while you are working. | advanced | yes | until reboot |
 | `mem.thp` | **Choose how memory is handed out in big chunks (THP)**: Decide when the kernel backs memory with large pages. | advanced | yes | until reboot |
-| `mem.thp-defrag` | **No stutter when memory gets large pages**: Stop programs from freezing while the kernel tidies memory to make large pages. | advanced | yes | until reboot |
-| `mem.min-free` | **Keep some RAM always free**: Hold back a bigger reserve of free memory so programs never have to wait for the kernel to clear space. | advanced | yes | until reboot |
+| `mem.thp-defrag` | **Fewer stalls when memory gets large pages**: Stop programs from freezing while the kernel tidies memory to make large pages. | advanced | yes | until reboot |
+| `mem.min-free` | **Keep some RAM always free**: Hold back a bigger reserve of free memory so programs rarely have to wait for the kernel to clear space. | advanced | yes | until reboot |
 | `mem.watermark-scale` | **Start freeing memory earlier**: Have the kernel begin clearing memory in the background sooner, so programs rarely wait for it. | advanced | yes | until reboot |
 | `mem.ksm` | **Stop scanning memory for duplicates**: Turn off a background thread that hunts for identical pages, which is wasted work outside of VM hosts. | situational | yes | until reboot |
 
@@ -166,11 +166,11 @@ In the app press `p` in the Optimizer. From the shell: `turbo preset list`, `tur
 
 | ID | What you get | Tier | Admin | Lasts |
 | --- | --- | --- | --- | --- |
-| `game.max-map-count` | **Fix game crashes from running out of memory maps**: Raise the limit on memory regions a single program may map. | situational | yes | until reboot |
-| `game.split-lock` | **Remove a stutter in some Windows games**: Stop the kernel from slowing programs that use split-lock memory operations. | situational | yes | until reboot |
-| `gpu.amd-level` | **Keep the AMD graphics card at full speed**: Hold an AMD graphics card at high clocks so games never wait for it to speed up. | situational | yes | until reboot |
+| `game.max-map-count` | **Higher memory-map limit for big games**: Raise the limit on memory regions a single program may map. | situational | yes | until reboot |
+| `game.split-lock` | **Reduce a stutter in some Windows games**: Stop the kernel from slowing programs that use split-lock memory operations. | situational | yes | until reboot |
+| `gpu.amd-level` | **Keep the AMD graphics card at full speed**: Hold an AMD graphics card at high clocks so games wait less for it to speed up. | situational | yes | until reboot |
 | `gpu.intel-min-clock` | **Wake the Intel graphics faster**: Raise the lowest speed of Intel integrated graphics so it is ready the moment a frame arrives. | situational | yes | until reboot |
-| `gpu.dgpu-awake` | **Keep the dedicated graphics card awake**: Stop the discrete GPU from powering down between uses, so games and apps start instantly. | situational | yes | until reboot |
+| `gpu.dgpu-awake` | **Keep the dedicated graphics card awake**: Stop the discrete GPU from powering down between uses, so games and apps start sooner. | situational | yes | until reboot |
 
 ### Desktop & Graphics (4)
 
@@ -179,7 +179,7 @@ In the app press `p` in the Optimizer. From the shell: `turbo preset list`, `tur
 | `desktop.hypr-effects` | **Plain, fast Hyprland (no animations, blur or shadows)**: Switch off window animations, background blur and drop shadows so the compositor does far less work per frame. | situational | no | this session |
 | `desktop.hypr-tearing` | **Lower input lag in games (allow tearing)**: Let full-screen games skip waiting for the screen refresh, so your mouse and keyboard show up sooner. | situational | no | this session |
 | `desktop.hypr-direct-scanout` | **Full-screen games skip the compositor**: Send a full-screen game directly to the monitor instead of copying it through the desktop first. | situational | no | this session |
-| `desktop.gnome-animations` | **Instant GNOME / GTK interface (no animations)**: Turn off GNOME and GTK animations so windows, menus and workspaces respond instantly. | situational | no | persistent |
+| `desktop.gnome-animations` | **GNOME / GTK without animations**: Turn off GNOME and GTK animations so windows, menus and workspaces respond without the animation delay. | situational | no | persistent |
 
 All kernel settings are written through one root helper that accepts only an exact allowlist of attributes and value patterns (see [SECURITY.md](SECURITY.md)); the 47 tweaks that need it ask for administrator permission once per tweak, and only work from a system-wide install (`sudo make install`, which also installs a polkit action so one password prompt covers a whole preset for about five minutes). Settings marked *until reboot* reset on restart; none edits a config file. Hyprland settings last until its config reloads.
 
@@ -215,11 +215,17 @@ Exit codes: `0` ok · `1` error · `2` usage error · `3` change rolled back / r
 | An administrator tweak says "running from a location you can modify" | Install system-wide: `sudo make install`. |
 | Interrupted run / "unfinished changes" dialog | Press **Enter** on *Recover now*, or `turbo snapshots recover`. See [docs/RECOVERY.md](docs/RECOVERY.md). |
 | Terminal looks broken after a crash | `reset` (TurboShift restores the screen on normal exit, Ctrl-C and SIGTERM). |
-| Something else | Run `turbo doctor --json` and attach the output to an issue. It contains no personal data beyond hardware/OS names. |
+| Something else | Run `turbo doctor --json --redact` and attach the output to an issue. `--redact` hides private IP addresses, MAC addresses and network interface names, which the plain output contains (see [PRIVACY.md](PRIVACY.md)); read it once before posting. |
 
-## Disclaimer
+## Disclaimer and legal notes
 
-TurboShift changes system settings. It previews every change, keeps a restore point and verifies the result, but it is provided **as is, without warranty** (see [LICENSE](LICENSE)). Review a preview before confirming, and keep your own backups of anything important. "TurboShift" is a project name only: it is not affiliated with, endorsed by, or derived from any other product or game of a similar name, and it makes no use of third-party logos, fonts or artwork (the banner is plain text).
+- **No warranty.** TurboShift changes system settings. It previews every change, keeps a restore point and verifies the result, but it is provided **as is, without warranty of any kind** and the authors are not liable for any damage, data loss or downtime (see [LICENSE](LICENSE)). Review a preview before confirming, and keep your own backups of anything important.
+- **No performance promise.** Every description says what a setting does and how to measure it. Results depend on your hardware, software and workload; a setting can make no difference or make things worse.
+- **Online games.** Some multiplayer games forbid or flag overlays and injected libraries (MangoHud, GameMode) or tuned systems. Read the game's rules; you use the Gaming screen at your own risk.
+- **Your network.** The Network Doctor contacts nothing beyond your router unless you allow it; allowed hosts see your IP address. Only load-test servers you own or whose terms allow it. The DNS tweak sends your lookups to the provider you choose. Details in [PRIVACY.md](PRIVACY.md).
+- **Managed machines.** Changing power, kernel, DNS or graphics settings on a computer you do not own (work, school) may breach its policy. Ask first.
+- **Names.** "TurboShift" is a project name only: it is not affiliated with, endorsed by, or derived from any other product, game or company of a similar name, and it uses no third-party logos, fonts, artwork or text (the banner is plain text). Intel, AMD, NVIDIA, Steam, Valve, Linux, GNOME, Hyprland, MangoHud, GameMode, Arch Linux, CachyOS, Ubuntu, Debian, Fedora, openSUSE, Cloudflare, Quad9, Google and other names appear only to say what TurboShift works with; they belong to their owners, who have not endorsed this project.
+- **Licences.** MIT. The binary contains Go and the libraries listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md); `turbo licenses` prints every licence text from the binary itself.
 
 ## Status and honesty
 

@@ -148,7 +148,7 @@ var minPerfOptions = []Option{
 func CPUMinPerf() Tweak {
 	t := one(Meta{
 		ID: "cpu.min-perf", Name: "Keep the CPU from idling low",
-		Summary:  "Raise the lowest speed the CPU is allowed to drop to, so it reacts instantly instead of ramping up.",
+		Summary:  "Raise the lowest speed the CPU is allowed to drop to, so it reacts sooner instead of ramping up.",
 		Details:  "Writes intel_pstate/min_perf_pct. By default an idle CPU parks at a tiny fraction of its speed and has to ramp up when work arrives. A higher floor removes that ramp-up delay.",
 		Helps:    "Latency-sensitive desktop and gaming use on a desktop PC or a plugged-in laptop with the Intel P-state driver.",
 		Tradeoff: "Higher idle power, heat and fan noise. The effect is small on modern CPUs, which already ramp in milliseconds.",
@@ -167,7 +167,7 @@ var hwpBoostOptions = []Option{
 // CPUHWPBoost toggles dynamic HWP boost.
 func CPUHWPBoost() Tweak {
 	t := one(Meta{
-		ID: "cpu.hwp-boost", Name: "Instant CPU boost after waiting",
+		ID: "cpu.hwp-boost", Name: "Faster CPU boost after waiting",
 		Summary:  "Make the CPU jump to full speed the moment a program resumes after waiting on disk or network.",
 		Details:  "Writes intel_pstate/hwp_dynamic_boost. When a thread that was blocked on I/O wakes up, the driver temporarily raises the speed limit instead of waiting for the CPU to notice the load.",
 		Helps:    "Responsiveness of builds, game loading and desktop use on Intel CPUs with HWP.",
@@ -317,7 +317,7 @@ var thpDefragOptions = []Option{
 // THPDefrag controls stalling for huge pages.
 func THPDefrag() Tweak {
 	t := one(Meta{
-		ID: "mem.thp-defrag", Name: "No stutter when memory gets large pages",
+		ID: "mem.thp-defrag", Name: "Fewer stalls when memory gets large pages",
 		Summary:  "Stop programs from freezing while the kernel tidies memory to make large pages.",
 		Details:  "Writes the transparent_hugepage/defrag policy. With some settings, a program that asks for memory can be paused while the kernel defragments RAM. 'defer+madvise' moves that work to a background thread so allocations never wait.",
 		Helps:    "Games, emulators and VMs that show random stutter when RAM has been in use for a long time.",
@@ -339,7 +339,7 @@ var minFreeOptions = []Option{
 func MinFree() Tweak {
 	return one(Meta{
 		ID: "mem.min-free", Name: "Keep some RAM always free",
-		Summary:  "Hold back a bigger reserve of free memory so programs never have to wait for the kernel to clear space.",
+		Summary:  "Hold back a bigger reserve of free memory so programs rarely have to wait for the kernel to clear space.",
 		Details:  "Sets vm.min_free_kbytes. When free memory falls to this level the kernel starts reclaiming immediately. A larger reserve makes sure there is room for sudden allocations (loading a level, starting a game) without a visible pause.",
 		Helps:    "Machines with 16 GB or more that stutter when RAM is nearly full of cache, and some 10 GbE setups.",
 		Tradeoff: "That reserve is not usable by programs. On a machine with little RAM it makes memory pressure worse.",
@@ -610,7 +610,7 @@ var dgpuOptions = []Option{
 func DGPUAwake() Tweak {
 	m := Meta{
 		ID: "gpu.dgpu-awake", Name: "Keep the dedicated graphics card awake",
-		Summary:  "Stop the discrete GPU from powering down between uses, so games and apps start instantly.",
+		Summary:  "Stop the discrete GPU from powering down between uses, so games and apps start sooner.",
 		Details:  "Writes the PCI power/control attribute of every non-boot graphics card. In 'auto' the GPU sleeps when idle and takes a noticeable moment (often a second or more) to wake when something asks for it.",
 		Helps:    "Gaming laptops (hybrid graphics) and desktops that drive a second card; apps that open and close often.",
 		Tradeoff: "A powered-on dedicated GPU draws several watts and can cut laptop battery life dramatically. Use it while plugged in.",

@@ -95,3 +95,8 @@ func ShellQuote(s string) string {
 	}
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
+
+// OverlayNotice is shown wherever launch options that inject GameMode or
+// MangoHud are offered. Some multiplayer games forbid or flag injected
+// libraries and overlays, and a ban is the player's loss, not ours.
+const OverlayNotice = "Some online games' anti-cheat or terms of service restrict overlays and injected libraries (such as MangoHud and GameMode). Check the game's rules before using these in multiplayer; you use them at your own risk."

@@ -22,6 +22,7 @@ func cmdDoctor(ctx context.Context, a *app.App, args []string, o *out) int {
 	fs := newFlags("doctor", o)
 	asJSON := fs.Bool("json", false, "machine-readable output")
 	top := fs.Bool("top", false, "also sample the heaviest processes for ~1 s")
+	redact := fs.Bool("redact", false, "with --json: hide private IP addresses, MAC addresses and network interface names (use this before pasting into a bug report)")
 	if _, err := parse(fs, args); err != nil {
 		return ExitUsage
 	}
@@ -32,6 +33,9 @@ func cmdDoctor(ctx context.Context, a *app.App, args []string, o *out) int {
 		procs = diagnostics.TopProcesses(ctx, a.FS, 5, time.Second)
 	}
 	if *asJSON {
+		if *redact {
+			return o.jsonRedacted(doctorJSON{schemaVersion, rep, findings, procs}, interfaceNames(rep.Network))
+		}
 		return o.json(doctorJSON{schemaVersion, rep, findings, procs})
 	}
 

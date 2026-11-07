@@ -59,6 +59,11 @@ type Destination struct {
 	External bool   `json:"external"`
 }
 
+// ExternalNotice is shown wherever the user is asked to allow external tests.
+// It is deliberately plain: who learns what, and what the user is responsible
+// for. Tests and PRIVACY.md keep it in step.
+const ExternalNotice = "Every external host above learns your public IP address, as with any connection. A download or upload URL is contacted exactly as typed and uses real bandwidth (it may count against a data cap): test only your own server or a service whose terms allow automated tests."
+
 // PlanDestinations lists exactly what Collect would contact for these options.
 func PlanDestinations(rep detect.Report, o NetOptions) []Destination {
 	o = o.withDefaults()

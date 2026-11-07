@@ -15,6 +15,8 @@ import (
 	"github.com/mttcn83/turboshift/internal/app"
 	"github.com/mttcn83/turboshift/internal/benchmark"
 	"github.com/mttcn83/turboshift/internal/config"
+	"github.com/mttcn83/turboshift/internal/diagnostics"
+	"github.com/mttcn83/turboshift/internal/platform"
 	"github.com/mttcn83/turboshift/internal/privilege"
 	"github.com/mttcn83/turboshift/internal/simtest"
 	"github.com/mttcn83/turboshift/internal/snapshot"
@@ -552,5 +554,68 @@ func TestGarbageArgumentsNeverPanic(t *testing.T) {
 				t.Fatalf("%q exited %d, outside the documented 0-3", args, code)
 			}
 		}()
+	}
+}
+
+// Bug reports are public: --redact must remove private addresses and
+// interface names from the whole document, and plain --json must stay complete.
+func TestRedactHidesAddressesAndInterfaceNames(t *testing.T) {
+	r := newRig(t)
+	for _, args := range [][]string{{"doctor", "--json"}, {"network", "--json"}} {
+		_, plain, _ := r.run(args...)
+		_, red, _ := r.run(append(args, "--redact")...)
+		if !strings.Contains(plain, "wlp3s0") || !strings.Contains(plain, "192.168.1.1") {
+			t.Fatalf("%v: the unredacted document should keep the real values for local use", args)
+		}
+		for _, secret := range []string{"wlp3s0", "192.168.1.1", "docker0"} {
+			if strings.Contains(red, secret) {
+				t.Errorf("%v --redact still contains %q", args, secret)
+			}
+		}
+		var doc map[string]any
+		if err := json.Unmarshal([]byte(red), &doc); err != nil || doc["schema_version"] != float64(1) {
+			t.Errorf("%v --redact is not a valid schema_version 1 document: %v", args, err)
+		}
+	}
+	out := string(redactJSON([]byte(`"AA:BB:CC:DD:EE:FF fe80::1:2 10.1.2.3 172.20.0.9 8.8.8.8 127.0.0.53 wlan0"`), []string{"wlan0"}))
+	for _, gone := range []string{"AA:BB", "fe80", "10.1.2.3", "172.20.0.9", "wlan0"} {
+		if strings.Contains(out, gone) {
+			t.Errorf("%q survived redaction: %s", gone, out)
+		}
+	}
+	for _, kept := range []string{"8.8.8.8", "127.0.0.53"} {
+		if !strings.Contains(out, kept) {
+			t.Errorf("%q is not private and should stay: %s", kept, out)
+		}
+	}
+}
+
+func TestExternalNetworkRunStatesWhoLearnsYourIP(t *testing.T) {
+	dests := []diagnostics.Destination{{Host: "1.1.1.1", Purpose: "ping", External: true}}
+	var ext, loc bytes.Buffer
+	printConsent(newOut(&ext, &ext), dests, true)
+	printConsent(newOut(&loc, &loc), nil, false)
+	if !strings.Contains(ext.String(), "learns your public IP address") || !strings.Contains(ext.String(), "terms allow automated tests") {
+		t.Errorf("the external consent text is missing:\n%s", ext.String())
+	}
+	if strings.Contains(loc.String(), "public IP address") {
+		t.Error("a local-only run must not talk about external hosts")
+	}
+}
+
+// fakeNet answers every probe instantly so CLI tests never touch the network.
+type fakeNet struct{}
+
+func (fakeNet) Ping(_ context.Context, host string, n int, _ time.Duration) (diagnostics.PingStats, error) {
+	return diagnostics.PingStats{Target: host, Sent: n, Received: n, AvgMs: 5, P50Ms: 5, P95Ms: 6, MaxMs: 7, MinMs: 4}, nil
+}
+func (fakeNet) Time(context.Context, string, string) (time.Duration, error) {
+	return 8 * time.Millisecond, nil
+}
+func (fakeNet) Load(context.Context, string, bool) (float64, error) { return 100, nil }
+
+func init() {
+	netDeps = func(fs platform.FS, run platform.Runner) diagnostics.NetDeps {
+		return diagnostics.NetDeps{Pinger: fakeNet{}, DNS: fakeNet{}, Loader: fakeNet{}, FS: fs, Run: run}
 	}
 }

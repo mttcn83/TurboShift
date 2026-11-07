@@ -32,6 +32,10 @@ Anything needing root must go through `internal/privilege` by adding an *allowli
 - Errors say what failed, why when known, and what to do next.
 - TUI changes need a render check at 64×18, 80×24 and 120×40, a no-colour/ASCII check, and keyboard *and* mouse paths.
 
+## Licensing of contributions
+
+TurboShift is MIT licensed. By opening a pull request you confirm that you wrote the change (or have the right to submit it) and that it may be distributed under the MIT licence. Do not paste code, text or data from sources with other licences (GPL, proprietary, forum posts of unknown origin) and do not copy another product's wording or screenshots; descriptions of kernel settings must be written in your own words from the kernel documentation or your own testing. New dependencies need a permissive licence (MIT, BSD, Apache-2.0) and an entry from `scripts/gen-notices.sh`.
+
 ## Pull requests
 
 Describe the user-visible change and how you tested it. State what you could **not** test; that is more useful than a claim of "works".

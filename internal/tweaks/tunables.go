@@ -234,7 +234,7 @@ var maxMapOptions = []Option{
 // MaxMapCount raises the per-process memory mapping limit.
 func MaxMapCount() Tweak {
 	return one(Meta{
-		ID: "game.max-map-count", Name: "Fix game crashes from running out of memory maps",
+		ID: "game.max-map-count", Name: "Higher memory-map limit for big games",
 		Summary:  "Raise the limit on memory regions a single program may map.",
 		Details:  "Sets vm.max_map_count. Large games, engines under Wine/Proton and some memory-hungry tools create hundreds of thousands of mappings; at the old limit of 65530 they fail to allocate and crash or hitch. Most current distributions already raise it.",
 		Helps:    "Steam/Proton players of large games; anyone seeing out-of-memory crashes with free RAM.",
@@ -252,7 +252,7 @@ var splitLockOptions = []Option{
 // SplitLockMitigate stops the kernel from penalising split-lock instructions.
 func SplitLockMitigate() Tweak {
 	return one(Meta{
-		ID: "game.split-lock", Name: "Remove a stutter in some Windows games",
+		ID: "game.split-lock", Name: "Reduce a stutter in some Windows games",
 		Summary:  "Stop the kernel from slowing programs that use split-lock memory operations.",
 		Details:  "Sets kernel.split_lock_mitigate to 0. A few games and anti-cheat layers use misaligned atomic instructions; the kernel penalises each with a ~10 ms stall, which shows up as severe stutter.",
 		Helps:    "Wine/Proton games with unexplained micro-freezes (look for 'split lock' messages in dmesg).",
@@ -368,7 +368,7 @@ var aspmOptions = []Option{
 func PCIeASPM() Tweak {
 	t := one(Meta{
 		ID: "pcie.aspm", Name: "Stop PCIe devices from dozing off (lower latency)",
-		Summary:  "Keep PCI Express links fully awake so NVMe drives, GPUs and network cards answer instantly.",
+		Summary:  "Keep PCI Express links fully awake so NVMe drives, GPUs and network cards answer sooner.",
 		Details:  "Sets the PCIe ASPM policy. Link power-saving states save energy but every wake-up adds microseconds to milliseconds of delay; 'performance' keeps links active. It only works where the firmware lets the system control ASPM.",
 		Helps:    "Desktops and plugged-in laptops that see latency spikes after idle in storage or GPU workloads.",
 		Tradeoff: "Higher idle power and heat, especially on laptops with an NVMe drive. The firmware can refuse changes (the kernel then reports the old value and TurboShift shows that).",
@@ -389,7 +389,7 @@ var amdDPMOptions = []Option{
 func AMDGPUPerformanceLevel() Tweak {
 	m := Meta{
 		ID: "gpu.amd-level", Name: "Keep the AMD graphics card at full speed",
-		Summary:  "Hold an AMD graphics card at high clocks so games never wait for it to speed up.",
+		Summary:  "Hold an AMD graphics card at high clocks so games wait less for it to speed up.",
 		Details:  "Writes power_dpm_force_performance_level for each amdgpu card. 'auto' lets the driver scale clocks with load, which can lag at the start of heavy frames; 'high' pins the top state.",
 		Helps:    "AMD GPU gamers on a desktop or plugged-in laptop who see ramp-up stutter.",
 		Tradeoff: "Much higher idle power, heat and fan noise while it is set; it does not raise the card's maximum, only removes the wait to reach it. Revert it when you stop gaming.",

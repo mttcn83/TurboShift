@@ -24,6 +24,7 @@ var topCommands = []struct{ name, desc string }{
 	{"benchmark", "import and compare benchmark logs"},
 	{"game", "launch options and wrapped game runs"},
 	{"completion", "print a shell completion script (bash or fish)"},
+	{"licenses", "print the licences of TurboShift and its dependencies"},
 }
 
 const completionUsage = "usage: turbo completion bash|fish\n" +
@@ -129,8 +130,8 @@ _turbo() {
             else
                 COMPREPLY=( $(compgen -W "$(turbo __complete snapshots 2>/dev/null) --force --json" -- "$cur") )
             fi ;;
-        doctor)    COMPREPLY=( $(compgen -W "--json --top" -- "$cur") ) ;;
-        network)   COMPREPLY=( $(compgen -W "--external --target --lookup --json" -- "$cur") ) ;;
+        doctor)    COMPREPLY=( $(compgen -W "--json --top --redact" -- "$cur") ) ;;
+        network)   COMPREPLY=( $(compgen -W "--external --target --lookup --json --redact --include-ssid" -- "$cur") ) ;;
         benchmark) COMPREPLY=( $(compgen -W "import list compare find" -- "$cur") ) ;;
         game)      COMPREPLY=( $(compgen -W "options run" -- "$cur") ) ;;
         completion) COMPREPLY=( $(compgen -W "bash fish" -- "$cur") ) ;;
@@ -182,6 +183,7 @@ func fishCompletion() string {
 	b.WriteString("complete -c turbo -n '__fish_seen_subcommand_from snapshots' -l force -d 'overwrite settings another program changed'\n")
 	b.WriteString("complete -c turbo -n '__fish_seen_subcommand_from doctor network snapshots tweaks' -l json -d 'machine-readable output'\n")
 	b.WriteString("complete -c turbo -n '__fish_seen_subcommand_from doctor' -l top -d 'include the busiest processes'\n")
+	b.WriteString("complete -c turbo -n '__fish_seen_subcommand_from doctor network' -l redact -d 'hide private IPs, MAC addresses and interface names in --json'\n")
 	b.WriteString("complete -c turbo -n '__fish_seen_subcommand_from network' -l external -d 'also test an external host'\n")
 	return b.String()
 }

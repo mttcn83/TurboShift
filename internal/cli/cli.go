@@ -41,6 +41,8 @@ Diagnose (read-only, no root needed)
   doctor [--json] [--top]        scan this PC and explain what limits it
   network [--external] [...]     layer-by-layer network diagnosis
   status                         one-screen summary and pending recovery
+  check [--json] [--reapply]     are the settings I applied still in effect? (--reapply puts back
+                                 any a restart reset; exit 3 if something is not holding)
 
 Optimize (reversible; every change is journaled first)
   tweaks list [filters]          what can be changed on this PC (--all: and why not the rest;
@@ -91,6 +93,8 @@ func Run(ctx context.Context, a *app.App, args []string, stdout, stderr io.Write
 		return cmdDoctor(ctx, a, rest, o)
 	case "status":
 		return cmdStatus(ctx, a, rest, o)
+	case "check", "verify":
+		return cmdCheck(ctx, a, rest, o)
 	case "tweaks":
 		return cmdTweaks(ctx, a, rest, o)
 	case "apply":

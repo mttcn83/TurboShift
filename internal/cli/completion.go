@@ -15,6 +15,7 @@ import (
 var topCommands = []struct{ name, desc string }{
 	{"doctor", "scan this PC and explain what limits it"},
 	{"status", "one-screen summary and pending recovery"},
+	{"check", "are the settings you applied still in effect?"},
 	{"network", "layer-by-layer network diagnosis"},
 	{"tweaks", "list or show the optimizations"},
 	{"apply", "apply optimizations (id=value)"},

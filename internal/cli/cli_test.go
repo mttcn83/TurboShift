@@ -523,7 +523,7 @@ func TestJSONDocumentsFollowTheContract(t *testing.T) {
 	}
 	for _, args := range [][]string{
 		{"doctor", "--json"}, {"tweaks", "list", "--json"}, {"preset", "list", "--json"},
-		{"snapshots", "list", "--json"}, {"status", "--json"}, {"network", "--json"}, {"benchmark", "list", "--json"},
+		{"snapshots", "list", "--json"}, {"status", "--json"}, {"check", "--json"}, {"network", "--json"}, {"benchmark", "list", "--json"},
 	} {
 		name := strings.Join(args, " ")
 		code, out, e := r.run(args...)
@@ -641,5 +641,52 @@ func (fakeNet) Load(context.Context, string, bool) (float64, error) { return 100
 func init() {
 	netDeps = func(fs platform.FS, run platform.Runner) diagnostics.NetDeps {
 		return diagnostics.NetDeps{Pinger: fakeNet{}, DNS: fakeNet{}, Loader: fakeNet{}, FS: fs, Run: run}
+	}
+}
+
+func TestCheckReportsResetAndReapplies(t *testing.T) {
+	r := newRig(t)
+	if code, out, e := r.run("check"); code != ExitOK || !strings.Contains(out, "nothing to check") {
+		t.Fatalf("empty: %d %s %s", code, out, e)
+	}
+	if code, out, e := r.run("apply", "power.profile=performance", "--yes"); code != 0 {
+		t.Fatalf("apply: %d %s %s", code, out, e)
+	}
+	if code, out, _ := r.run("check"); code != ExitOK || !strings.Contains(out, "OK") {
+		t.Fatalf("holding: %d %s", code, out)
+	}
+	r.mach.PPDProfile = "balanced" // a restart reset it
+	code, out, _ := r.run("check")
+	if code != ExitPartial || !strings.Contains(out, "RESET") {
+		t.Fatalf("reset: %d %s", code, out)
+	}
+	code, out, _ = r.run("check", "--json")
+	var doc struct {
+		Settings []struct{ State string } `json:"settings"`
+	}
+	if code != ExitPartial || json.Unmarshal([]byte(out), &doc) != nil || len(doc.Settings) != 1 || doc.Settings[0].State != "reset" {
+		t.Fatalf("json: %d %s", code, out)
+	}
+	if code, out, e := r.run("check", "--reapply", "--yes"); code != ExitOK || r.mach.PPDProfile != "performance" {
+		t.Fatalf("reapply: %d profile=%s %s %s", code, r.mach.PPDProfile, out, e)
+	}
+	if code, _, _ := r.run("check"); code != ExitOK {
+		t.Fatalf("after reapply: %d", code)
+	}
+	r.mach.PPDProfile = "power-saver" // a third value: someone else's change
+	code, out, _ = r.run("check", "--reapply", "--yes")
+	if code != ExitPartial || !strings.Contains(out, "CHANGED") || r.mach.PPDProfile != "power-saver" {
+		t.Fatalf("changed must be left alone: %d profile=%s %s", code, r.mach.PPDProfile, out)
+	}
+}
+
+func TestCheckForgetsRestoredSettings(t *testing.T) {
+	r := newRig(t)
+	r.run("apply", "power.profile=performance", "--yes")
+	if code, _, e := r.run("undo", "--yes"); code != 0 {
+		t.Fatalf("undo: %d %s", code, e)
+	}
+	if code, out, _ := r.run("check"); code != ExitOK || !strings.Contains(out, "nothing to check") {
+		t.Fatalf("restored settings must not be checked: %d %s", code, out)
 	}
 }

@@ -66,6 +66,10 @@ Uninstall with `sudo make uninstall`. TurboShift keeps its data in your XDG dire
 
 Keys: `1`-`8` or `Tab` switch screens · `↑↓` move · `Space` select · `Enter` open/confirm · `/` search · `?` help · `q` quit. On the Dashboard, `g` `d` `n` `m` start the Gaming / Snappy desktop / Network / Maximum goals (always previewed first) and `u` undoes the last change. In the Optimizer, `a` applies the setting under the cursor (or everything you ticked), `p` picks a preset, `c` cycles the category, `t` the tier, `v` the view (all / suggested for this PC) and `w` hides anything that needs an administrator password; `Esc` clears the filters. The filter chips above the list are clickable. The mouse works everywhere (tabs, rows, buttons, dialogs, wheel). `NO_COLOR` and `TERM=dumb` are honoured; the Linux console and non-UTF-8 locales get an ASCII-only rendering automatically.
 
+### Do my settings survive a restart?
+
+Many kernel settings last only until reboot. `turbo check` tells you which of your applied settings are still in effect; `turbo check --reapply` puts back the ones that were reset (never the ones another program changed) and records a restore point. `--json` and the exit code (3 = something is not holding) make it scriptable.
+
 ### A typical session
 
 1. `turbo` → press **Enter** on the Dashboard (scan).

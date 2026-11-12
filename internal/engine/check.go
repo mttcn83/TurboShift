@@ -47,23 +47,21 @@ func (e *Engine) Check(ctx context.Context) ([]CheckResult, error) {
 			continue
 		}
 		for _, it := range s.Items {
-			switch it.Status {
-			case snapshot.ItemVerified, snapshot.ItemDrifted:
-				if _, ok := active[it.TweakID]; !ok {
-					order = append(order, it.TweakID)
-				}
-				active[it.TweakID] = entry{s.ID, it}
-			case snapshot.ItemReverted:
-				delete(active, it.TweakID)
+			// A reverted item is skipped, not used to drop an older point's
+			// entry: reverting puts back the value from before this point,
+			// which is what the older point applied, so that one still counts.
+			if it.Status != snapshot.ItemVerified && it.Status != snapshot.ItemDrifted {
+				continue
 			}
+			if _, ok := active[it.TweakID]; !ok {
+				order = append(order, it.TweakID)
+			}
+			active[it.TweakID] = entry{s.ID, it}
 		}
 	}
 	var out []CheckResult
 	for _, id := range order {
-		en, ok := active[id]
-		if !ok {
-			continue
-		}
+		en := active[id]
 		it := en.it
 		res := CheckResult{TweakID: id, Name: it.Name, SnapshotID: en.snap, Params: it.Params}
 		t, known := e.Reg.Get(id)

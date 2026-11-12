@@ -3,6 +3,7 @@
 ## Unreleased
 
 - New `turbo check [--json] [--reapply [--yes]]`: compares what your restore points say is applied with the live system. Each setting is reported as holding, reset (back at its original value, typically after a restart for "until reboot" settings), or changed by something else. `--reapply` puts back only the reset ones, with a new restore point; settings someone else changed are never touched. Exits 3 when anything is not holding, so it works in scripts and login hooks.
+- Fix: `turbo check` no longer loses a setting when a newer restore point that changed it again was only partly restored. The older point's value is back in effect, so it is checked (and re-applied by `--reapply`) again, and a setting is never listed twice.
 
 ## 1.1.0
 
